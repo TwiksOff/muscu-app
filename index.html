@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Muscu Tracker</title>
+
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#00ff88">
+</head>
+
+<body>
+
+<header>
+<h1>Muscu Tracker</h1>
+</header>
+
+<nav>
+<button onclick="showPage('dashboard')">Dashboard</button>
+<button onclick="showPage('workout')">Entraînement</button>
+<button onclick="showPage('history')">Historique</button>
+<button onclick="showPage('exercises')">Exercices</button>
+</nav>
+
+<main>
+
+<section id="dashboard" class="page">
+<h2>Dashboard</h2>
+<p id="stats"></p>
+</section>
+
+<section id="workout" class="page">
+<h2>Nouvel entraînement</h2>
+
+<input id="exerciseName" placeholder="Exercice">
+
+<input id="reps" type="number" placeholder="Répétitions">
+
+<input id="weight" type="number" placeholder="Poids">
+
+<button onclick="addExercise()">Ajouter série</button>
+
+<ul id="workoutList"></ul>
+
+<button onclick="saveWorkout()">Terminer entraînement</button>
+</section>
+
+<section id="history" class="page">
+<h2>Historique</h2>
+<ul id="historyList"></ul>
+</section>
+
+<section id="exercises" class="page">
+<h2>Bibliothèque d'exercices</h2>
+
+<ul>
+<li>Développé couché</li>
+<li>Squat</li>
+<li>Soulevé de terre</li>
+<li>Tractions</li>
+<li>Développé militaire</li>
+</ul>
+
+</section>
+
+</main>
+
+<script src="app.js"></script>
+
+</body>
+</html>
