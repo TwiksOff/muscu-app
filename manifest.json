@@ -1,6 +1,6 @@
 {
 "name": "Strong Boy",
-"short_name": "Muscu",
+"short_name": "Be Strong",
 "start_url": "index.html",
 "display": "standalone",
 "background_color": "#0f0f0f",
@@ -12,5 +12,4 @@
 "type":"image/png"
 }
 ]
-
 }

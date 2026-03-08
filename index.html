@@ -6,50 +6,45 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#080809">
-  <title>IRON LOG</title>
+  <title>STRONG BOY</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- STATUS BAR SPACER -->
   <div class="status-bar-spacer"></div>
 
-  <!-- APP SHELL -->
   <div class="app">
 
-    <!-- ── PAGE: DASHBOARD ── -->
+    <!-- ── DASHBOARD ── -->
     <div class="page active" id="page-dashboard">
       <div class="page-scroll">
         <div class="top-bar">
-          <div class="top-bar-logo">IRON<span>.</span>LOG</div>
+          <div class="top-bar-logo">STRONG<span>.</span>BOY</div>
           <button class="icon-btn" onclick="openNewSessionModal()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
         </div>
-
         <div class="greeting-block">
           <div class="greeting-label" id="greeting-label">Bonjour</div>
           <div class="greeting-date" id="greeting-date">Chargement...</div>
         </div>
-
         <div class="stats-scroll" id="stats-row"></div>
-
         <div class="section-header">
           <span class="section-title">Récentes</span>
           <button class="text-btn" onclick="showPage('sessions')">Voir tout</button>
         </div>
         <div id="recent-sessions"></div>
-
         <div class="section-header" style="margin-top:8px">
           <span class="section-title">Cette semaine</span>
         </div>
         <div id="week-heatmap-dash"></div>
+        <div style="height:8px"></div>
       </div>
     </div>
 
-    <!-- ── PAGE: SESSIONS ── -->
+    <!-- ── SESSIONS ── -->
     <div class="page" id="page-sessions">
       <div class="page-scroll">
         <div class="top-bar">
@@ -62,7 +57,7 @@
       </div>
     </div>
 
-    <!-- ── PAGE: SESSION DETAIL ── -->
+    <!-- ── SESSION DETAIL ── -->
     <div class="page" id="page-detail">
       <div class="page-scroll">
         <div class="top-bar">
@@ -76,7 +71,20 @@
       </div>
     </div>
 
-    <!-- ── PAGE: PROGRESS ── -->
+    <!-- ── PRESETS ── -->
+    <div class="page" id="page-presets">
+      <div class="page-scroll">
+        <div class="top-bar">
+          <div class="top-bar-title">Presets</div>
+          <button class="icon-btn" onclick="openNewPresetSheet()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+        <div id="presets-list"></div>
+      </div>
+    </div>
+
+    <!-- ── PROGRESS ── -->
     <div class="page" id="page-progress">
       <div class="page-scroll">
         <div class="top-bar">
@@ -86,16 +94,16 @@
       </div>
     </div>
 
-  </div><!-- /.app -->
+  </div>
 
   <!-- BOTTOM NAV -->
-  <nav class="bottom-nav" id="bottom-nav">
+  <nav class="bottom-nav">
     <button class="nav-item active" onclick="showPage('dashboard')" data-page="dashboard">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
       <span class="nav-label">Dashboard</span>
     </button>
     <button class="nav-item" onclick="showPage('sessions')" data-page="sessions">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       <span class="nav-label">Séances</span>
     </button>
     <button class="nav-item add-center" onclick="openNewSessionModal()">
@@ -103,26 +111,21 @@
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </div>
     </button>
+    <button class="nav-item" onclick="showPage('presets')" data-page="presets">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="11"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="18" width="7" height="3"/></svg>
+      <span class="nav-label">Presets</span>
+    </button>
     <button class="nav-item" onclick="showPage('progress')" data-page="progress">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      <span class="nav-label">Progression</span>
-    </button>
-    <button class="nav-item" data-page="none" style="opacity:0;pointer-events:none">
-      <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/></svg>
-      <span class="nav-label"></span>
+      <span class="nav-label">Stats</span>
     </button>
   </nav>
 
-  <!-- HOME INDICATOR SPACER -->
   <div class="home-indicator-spacer"></div>
-
-  <!-- TOAST -->
   <div class="toast-container" id="toast-container"></div>
 
-  <!-- BOTTOM SHEET OVERLAY -->
+  <!-- MAIN BOTTOM SHEET -->
   <div class="sheet-overlay" id="sheet-overlay" onclick="closeSheet()"></div>
-
-  <!-- BOTTOM SHEET -->
   <div class="bottom-sheet" id="bottom-sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-header">
@@ -133,6 +136,23 @@
     </div>
     <div class="sheet-body" id="sheet-body"></div>
     <div class="sheet-footer" id="sheet-footer"></div>
+  </div>
+
+  <!-- EXERCISE PICKER (stacked sheet) -->
+  <div class="picker-overlay" id="picker-overlay" onclick="closePicker()"></div>
+  <div class="picker-sheet" id="picker-sheet">
+    <div class="sheet-handle"></div>
+    <div class="picker-header">
+      <span class="sheet-title">Exercice</span>
+      <button class="icon-btn" onclick="closePicker()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="picker-search-wrap">
+      <svg class="picker-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="picker-search" id="picker-search" placeholder="Rechercher ou créer…" oninput="filterPicker(this.value)" autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="picker-body" id="picker-body"></div>
   </div>
 
   <script src="app.js"></script>
