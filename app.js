@@ -169,6 +169,7 @@ function getAllKnownExercises() {
 
 function seedData() {
   if (DB.sessions.length > 0) return;
+  /*
   const D = 86400000, now = Date.now();
   DB.save([
     {
@@ -249,6 +250,7 @@ function seedData() {
       },
     ]);
   }
+  */
 }
 
 // ─────────────────────────────────────────────────────
@@ -277,8 +279,6 @@ function renderDashboard() {
   const sessions = DB.sessions;
   const now = new Date();
   const day7 = new Date(now - 7 * 86400000);
-  const h = now.getHours();
-  document.getElementById('greeting-label').textContent = h < 12 ? 'Bonjour' : 'Bonsoir';
   document.getElementById('greeting-date').textContent =
     now.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }).toUpperCase();
 
