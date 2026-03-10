@@ -23,13 +23,13 @@
       <div class="page-scroll">
         <div class="top-bar">
           <div class="top-bar-logo">STRONG<span>.</span>BOY</div>
-          <button class="icon-btn" onclick="openNewSessionModal()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <button class="icon-btn" onclick="openMenu()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
         </div>
         <div class="greeting-block">
           <div class="greeting-label" id="greeting-label">Bonjour</div>
-          <div class="greeting-date" id="greeting-date">Chargement...</div>
+          <div class="greeting-date" id="greeting-date">…</div>
         </div>
         <div class="stats-scroll" id="stats-row"></div>
         <div class="section-header">
@@ -38,7 +38,7 @@
         </div>
         <div id="recent-sessions"></div>
         <div class="section-header" style="margin-top:8px">
-          <span class="section-title">Cette semaine</span>
+          <span class="section-title">7 derniers jours</span>
         </div>
         <div id="week-heatmap-dash"></div>
         <div style="height:8px"></div>
@@ -62,7 +62,7 @@
     <div class="page" id="page-detail">
       <div class="page-scroll">
         <div class="top-bar">
-          <button class="back-btn-top" onclick="showPage('sessions')">
+          <button class="back-btn-top" id="detail-back-btn" onclick="showPage('sessions')">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             Séances
           </button>
@@ -85,17 +85,17 @@
       </div>
     </div>
 
-    <!-- ── PROGRESS ── -->
+    <!-- ── STATS ── -->
     <div class="page" id="page-progress">
       <div class="page-scroll">
         <div class="top-bar">
-          <div class="top-bar-title">Progression</div>
+          <div class="top-bar-title">Statistiques</div>
         </div>
         <div id="progress-content"></div>
       </div>
     </div>
 
-  </div>
+  </div><!-- /.app -->
 
   <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
@@ -125,6 +125,57 @@
   <div class="home-indicator-spacer"></div>
   <div class="toast-container" id="toast-container"></div>
 
+  <!-- MENU DRAWER (hamburger) -->
+  <div class="drawer-overlay" id="drawer-overlay" onclick="closeMenu()"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div class="drawer-logo">STRONG<span>.</span>BOY</div>
+      <button class="icon-btn" onclick="closeMenu()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="drawer-profile-card" onclick="openProfileSheet()">
+      <div class="drawer-avatar" id="drawer-avatar">?</div>
+      <div class="drawer-profile-info">
+        <div class="drawer-profile-name" id="drawer-profile-name">Mon Profil</div>
+        <div class="drawer-profile-sub" id="drawer-profile-sub">Configurer le profil →</div>
+      </div>
+    </div>
+    <div class="drawer-divider"></div>
+    <nav class="drawer-nav">
+      <button class="drawer-nav-item" onclick="closeMenu();showPage('dashboard')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </button>
+      <button class="drawer-nav-item" onclick="closeMenu();showPage('sessions')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Séances
+      </button>
+      <button class="drawer-nav-item" onclick="closeMenu();showPage('presets')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="11"/><rect x="14" y="3" width="7" height="7"/></svg>
+        Presets
+      </button>
+      <button class="drawer-nav-item" onclick="closeMenu();showPage('progress')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Statistiques
+      </button>
+    </nav>
+    <div class="drawer-divider"></div>
+    <nav class="drawer-nav">
+      <button class="drawer-nav-item" onclick="closeMenu();openProfileSheet()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Profil & mensurations
+      </button>
+      <button class="drawer-nav-item" onclick="closeMenu();openSettingsSheet()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Paramètres
+      </button>
+    </nav>
+    <div class="drawer-footer">
+      <span class="drawer-version">STRONG BOY v2.0</span>
+    </div>
+  </div>
+
   <!-- MAIN BOTTOM SHEET -->
   <div class="sheet-overlay" id="sheet-overlay" onclick="closeSheet()"></div>
   <div class="bottom-sheet" id="bottom-sheet">
@@ -139,7 +190,7 @@
     <div class="sheet-footer" id="sheet-footer"></div>
   </div>
 
-  <!-- EXERCISE PICKER (stacked sheet) -->
+  <!-- EXERCISE PICKER -->
   <div class="picker-overlay" id="picker-overlay" onclick="closePicker()"></div>
   <div class="picker-sheet" id="picker-sheet">
     <div class="sheet-handle"></div>
