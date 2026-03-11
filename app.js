@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   STRONG BOY — app.js  v3.0
+   STRONG BOY — app.js  v4.0  (optimised)
    ═══════════════════════════════════════════════════ */
 'use strict';
 
@@ -32,59 +32,95 @@ function getMuscleForExercise(name) {
 }
 
 // ─────────────────────────────────────────────────────
-// DATA STORES
+// IN-MEMORY CACHE  ← load once, keep hot
+// ─────────────────────────────────────────────────────
+
+const _cache = {
+  sessions: null,
+  presets: null,
+  customEx: null,
+  profile: null,
+  bodyLog: null,
+  settings: null,
+};
+
+function _load(key, fallback = []) {
+  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
+  catch(e) { return fallback; }
+}
+function _persist(key, data) { localStorage.setItem(key, JSON.stringify(data)); }
+
+// ─────────────────────────────────────────────────────
+// DATA STORES  (always hit cache first)
 // ─────────────────────────────────────────────────────
 
 const DB = {
   _key: 'strongboy_v2',
-  get sessions() { try { return JSON.parse(localStorage.getItem(this._key)||'[]'); } catch(e){ return []; } },
-  save(l){ localStorage.setItem(this._key, JSON.stringify(l)); },
-  add(s){ const l=this.sessions; l.unshift(s); this.save(l); },
-  update(s){ const l=this.sessions; const i=l.findIndex(x=>x.id===s.id); if(i!==-1){l[i]=s; this.save(l);} },
-  remove(id){ this.save(this.sessions.filter(s=>s.id!==id)); },
-  find(id){ return this.sessions.find(s=>s.id===id); },
+  get sessions() {
+    if (!_cache.sessions) _cache.sessions = _load(this._key, []);
+    return _cache.sessions;
+  },
+  save(l)   { _cache.sessions = l; _persist(this._key, l); },
+  add(s)    { const l = this.sessions; l.unshift(s); this.save(l); },
+  update(s) { const l = this.sessions; const i = l.findIndex(x => x.id === s.id); if(i !== -1){ l[i] = s; this.save(l); } },
+  remove(id){ this.save(this.sessions.filter(s => s.id !== id)); },
+  find(id)  { return this.sessions.find(s => s.id === id); },
 };
 
 const PRESETS = {
   _key: 'strongboy_presets',
-  get list() { try { return JSON.parse(localStorage.getItem(this._key)||'[]'); } catch(e){ return []; } },
-  save(l){ localStorage.setItem(this._key, JSON.stringify(l)); },
-  add(p){ const l=this.list; l.unshift(p); this.save(l); },
-  update(p){ const l=this.list; const i=l.findIndex(x=>x.id===p.id); if(i!==-1){l[i]=p; this.save(l);} },
-  remove(id){ this.save(this.list.filter(p=>p.id!==id)); },
-  find(id){ return this.list.find(p=>p.id===id); },
+  get list() {
+    if (!_cache.presets) _cache.presets = _load(this._key, []);
+    return _cache.presets;
+  },
+  save(l)   { _cache.presets = l; _persist(this._key, l); },
+  add(p)    { const l = this.list; l.unshift(p); this.save(l); },
+  update(p) { const l = this.list; const i = l.findIndex(x => x.id === p.id); if(i !== -1){ l[i] = p; this.save(l); } },
+  remove(id){ this.save(this.list.filter(p => p.id !== id)); },
+  find(id)  { return this.list.find(p => p.id === id); },
 };
 
 const CUSTOM_EX = {
   _key: 'strongboy_custom_ex',
-  get list() { try { return JSON.parse(localStorage.getItem(this._key)||'[]'); } catch(e){ return []; } },
-  add(name){ const l=this.list; if(!l.includes(name)){l.push(name); localStorage.setItem(this._key,JSON.stringify(l));} },
+  get list() {
+    if (!_cache.customEx) _cache.customEx = _load(this._key, []);
+    return _cache.customEx;
+  },
+  add(name){ const l = this.list; if(!l.includes(name)){ l.push(name); _persist(this._key, l); } },
 };
 
 const PROFILE = {
   _key: 'strongboy_profile',
-  get data() { try { return JSON.parse(localStorage.getItem(this._key)||'{}'); } catch(e){ return {}; } },
-  save(d){ localStorage.setItem(this._key, JSON.stringify(d)); },
-  get(k,fb=''){ return this.data[k] ?? fb; },
-  set(k,v){ const d=this.data; d[k]=v; this.save(d); },
+  get data() {
+    if (!_cache.profile) _cache.profile = _load(this._key, {});
+    return _cache.profile;
+  },
+  save(d){ _cache.profile = d; _persist(this._key, d); },
+  get(k, fb=''){ return this.data[k] ?? fb; },
+  set(k, v){ const d = this.data; d[k] = v; this.save(d); },
 };
 
 const BODY_LOG = {
   _key: 'strongboy_body',
-  get entries() { try { return JSON.parse(localStorage.getItem(this._key)||'[]'); } catch(e){ return []; } },
-  save(l){ localStorage.setItem(this._key, JSON.stringify(l)); },
-  add(e){ const l=this.entries; l.unshift(e); this.save(l); },
+  get entries() {
+    if (!_cache.bodyLog) _cache.bodyLog = _load(this._key, []);
+    return _cache.bodyLog;
+  },
+  save(l){ _cache.bodyLog = l; _persist(this._key, l); },
+  add(e) { const l = this.entries; l.unshift(e); this.save(l); },
   latest(){ return this.entries[0] || {}; },
 };
 
 const SETTINGS = {
   _key: 'strongboy_settings',
-  get data() { try { return JSON.parse(localStorage.getItem(this._key)||'{}'); } catch(e){ return {}; } },
-  get(k,fb){ const v=this.data[k]; return v===undefined ? fb : v; },
-  set(k,v){ const d=this.data; d[k]=v; localStorage.setItem(this._key,JSON.stringify(d)); },
+  get data() {
+    if (!_cache.settings) _cache.settings = _load(this._key, {});
+    return _cache.settings;
+  },
+  get(k, fb){ const v = this.data[k]; return v === undefined ? fb : v; },
+  set(k, v){ const d = this.data; d[k] = v; _cache.settings = d; _persist(this._key, d); },
 };
 
-// All localStorage keys for reset/export
 const ALL_KEYS = ['strongboy_v2','strongboy_presets','strongboy_custom_ex','strongboy_profile','strongboy_body','strongboy_settings'];
 
 function getAllKnownExercises() {
@@ -101,54 +137,6 @@ function getLastSetsForExercise(name, excludeSessionId=null) {
     if (ex && ex.sets.length > 0) return { sets: ex.sets, date: s.date };
   }
   return null;
-}
-
-// ─────────────────────────────────────────────────────
-// SEED
-// ─────────────────────────────────────────────────────
-
-function seedData() {
-  if (DB.sessions.length > 0) return;
-  const D=86400000, now=Date.now();
-  DB.save([
-    { id:'s1', name:'Push A', note:'Énergie haute, bonne séance', date:isoDate(now-D*1), duration:62,
-      exercises:[
-        {id:'e1',name:'Développé couché barre',      sets:[{w:100,r:8,n:''},{w:102.5,r:8,n:''},{w:105,r:6,n:'Difficile'}]},
-        {id:'e2',name:'Développé incliné haltères',   sets:[{w:36,r:10,n:''},{w:36,r:10,n:''},{w:38,r:8,n:''}]},
-        {id:'e3',name:'Élévations latérales haltères',sets:[{w:14,r:15,n:''},{w:14,r:15,n:''},{w:16,r:12,n:''}]},
-        {id:'e4',name:'Extension triceps poulie haute',sets:[{w:32,r:12,n:''},{w:34,r:12,n:''},{w:36,r:10,n:''}]},
-      ]},
-    { id:'s2', name:'Pull A', note:'', date:isoDate(now-D*3), duration:55,
-      exercises:[
-        {id:'e5',name:'Tractions lestées',  sets:[{w:15,r:7,n:''},{w:15,r:6,n:''},{w:15,r:5,n:''}]},
-        {id:'e6',name:'Rowing barre',       sets:[{w:80,r:8,n:''},{w:82.5,r:8,n:''},{w:85,r:6,n:''}]},
-        {id:'e7',name:'Curl haltères assis',sets:[{w:18,r:12,n:''},{w:20,r:10,n:''},{w:20,r:9,n:''}]},
-      ]},
-    { id:'s3', name:'Legs A', note:'DOMS intenses !', date:isoDate(now-D*5), duration:70,
-      exercises:[
-        {id:'e8', name:'Squat barre',      sets:[{w:130,r:5,n:''},{w:135,r:5,n:''},{w:140,r:4,n:'PR !'}]},
-        {id:'e9', name:'Presse à cuisses', sets:[{w:200,r:10,n:''},{w:220,r:10,n:''},{w:240,r:8,n:''}]},
-        {id:'e10',name:'Leg curl couché',  sets:[{w:45,r:12,n:''},{w:47.5,r:12,n:''},{w:50,r:10,n:''}]},
-        {id:'e11',name:'Hip thrust barre', sets:[{w:100,r:12,n:''},{w:110,r:10,n:''},{w:120,r:8,n:''}]},
-      ]},
-    { id:'s4', name:'Push B', note:'', date:isoDate(now-D*8), duration:58,
-      exercises:[
-        {id:'e12',name:'Développé couché barre',    sets:[{w:97.5,r:8,n:''},{w:100,r:8,n:''},{w:100,r:7,n:''}]},
-        {id:'e13',name:'Développé militaire barre',  sets:[{w:62.5,r:6,n:''},{w:65,r:6,n:''},{w:67.5,r:5,n:''}]},
-      ]},
-    { id:'s5', name:'Pull B', note:'', date:isoDate(now-D*10), duration:50,
-      exercises:[
-        {id:'e14',name:'Tractions lestées',sets:[{w:12.5,r:6,n:''},{w:15,r:6,n:''},{w:15,r:5,n:''}]},
-        {id:'e15',name:'Rowing barre',     sets:[{w:77.5,r:8,n:''},{w:80,r:8,n:''},{w:80,r:7,n:''}]},
-      ]},
-  ]);
-  if (PRESETS.list.length === 0) {
-    PRESETS.save([
-      {id:'p1',name:'Push PPL',exercises:[{name:'Développé couché barre',defaultSets:3},{name:'Développé incliné haltères',defaultSets:3},{name:'Élévations latérales haltères',defaultSets:3},{name:'Extension triceps poulie haute',defaultSets:3}]},
-      {id:'p2',name:'Pull PPL',exercises:[{name:'Tractions lestées',defaultSets:3},{name:'Rowing barre',defaultSets:3},{name:'Curl haltères assis',defaultSets:3},{name:'Face pull poulie',defaultSets:3}]},
-      {id:'p3',name:'Legs PPL',exercises:[{name:'Squat barre',defaultSets:4},{name:'Presse à cuisses',defaultSets:3},{name:'Leg curl couché',defaultSets:3},{name:'Hip thrust barre',defaultSets:3}]},
-    ]);
-  }
 }
 
 // ─────────────────────────────────────────────────────
@@ -173,6 +161,53 @@ function showPage(name) {
 function goBackFromDetail() { showPage(_prevPage || 'sessions'); }
 
 // ─────────────────────────────────────────────────────
+// EVENT DELEGATION  ← single root listener
+// ─────────────────────────────────────────────────────
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-action]');
+  if (!t) return;
+  const action = t.dataset.action;
+  const id = t.dataset.id;
+  const idx = t.dataset.idx !== undefined ? +t.dataset.idx : undefined;
+  const si  = t.dataset.si  !== undefined ? +t.dataset.si  : undefined;
+
+  switch(action){
+    case 'show-detail':   showSessionDetail(id); break;
+    case 'edit-session':  e.stopPropagation(); openEditSession(id); break;
+    case 'del-session':   e.stopPropagation(); confirmDeleteSession(id); break;
+    case 'del-session-detail': e.stopPropagation(); confirmDeleteSession(id, true); break;
+    case 'edit-preset':   openEditPreset(id); break;
+    case 'del-preset':    confirmDeletePreset(id); break;
+    case 'start-preset':  openNewSessionModal(id); break;
+    case 'picker-open':   openPicker(idx); break;
+    case 'preset-picker': openPresetPicker(idx); break;
+    case 'add-set':       addSet(idx); break;
+    case 'rm-set':        removeSet(idx, si); break;
+    case 'rm-ex':         removeExercise(idx); break;
+    case 'rm-preset-ex':  removePresetExercise(idx); break;
+    case 'share-card':    openShareCard(id); break;
+    case 'select-pex':    selectPEx(t.dataset.name); break;
+    case 'pick-ex':       selectExercise(t.dataset.name); break;
+    case 'create-ex':     createCustomExercise(t.dataset.query); break;
+    case 'timer-preset':  setTimerPreset(+t.dataset.secs); break;
+    case 'timer-adj':     adjustTimer(+t.dataset.delta); break;
+    case 'fav-toggle':    toggleFavorite(id); break;
+    case 'super-toggle':  toggleSuperset(idx); break;
+    case 'note-toggle':   toggleSetNote(idx, si); break;
+  }
+}, true);
+
+// ─────────────────────────────────────────────────────
+// DEBOUNCE helper
+// ─────────────────────────────────────────────────────
+
+function debounce(fn, ms=200) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ─────────────────────────────────────────────────────
 // DASHBOARD
 // ─────────────────────────────────────────────────────
 
@@ -182,7 +217,7 @@ function renderDashboard() {
   const h = now.getHours();
   const profileName = PROFILE.get('name','');
   document.getElementById('greeting-label').textContent =
-    (h < 12 ? 'Bonjour' : 'Bonsoir') + (profileName ? ` ${profileName.split(' ')[0]}` : '');
+    (h < 12 ? 'Bonjour' : h < 18 ? 'Bonne après-midi' : 'Bonsoir') + (profileName ? ` ${profileName.split(' ')[0]}` : '');
   document.getElementById('greeting-date').textContent =
     now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}).toUpperCase();
 
@@ -193,13 +228,24 @@ function renderDashboard() {
   const streak   = computeStreak(sessions);
   const avgDur   = computeAvgDuration(sessions);
 
-  document.getElementById('stats-row').innerHTML = `
-    <div class="stat-pill"><div class="stat-pill-label">Total</div><div class="stat-pill-value">${sessions.length}</div><div class="stat-pill-unit">séances</div></div>
-    <div class="stat-pill"><div class="stat-pill-label">Cette semaine</div><div class="stat-pill-value">${thisWeek.length}</div><div class="stat-pill-unit">séances</div></div>
-    <div class="stat-pill"><div class="stat-pill-label">Volume total</div><div class="stat-pill-value">${fmtNum(totalVol)}</div><div class="stat-pill-unit">kg</div></div>
-    <div class="stat-pill"><div class="stat-pill-label">Exercices</div><div class="stat-pill-value">${uniqueEx}</div><div class="stat-pill-unit">uniques</div></div>
-    ${avgDur ? `<div class="stat-pill"><div class="stat-pill-label">Durée moy.</div><div class="stat-pill-value">${avgDur}</div><div class="stat-pill-unit">min / séance</div></div>` : ''}
-  `;
+  // Build stats pills using DocumentFragment
+  const statsEl = document.getElementById('stats-row');
+  const frag = document.createDocumentFragment();
+  const pills = [
+    { label:'Total', value:sessions.length, unit:'séances' },
+    { label:'Cette semaine', value:thisWeek.length, unit:'séances' },
+    { label:'Volume total', value:fmtNum(totalVol), unit:'kg' },
+    { label:'Exercices', value:uniqueEx, unit:'uniques' },
+    ...(avgDur ? [{ label:'Durée moy.', value:avgDur, unit:'min / séance' }] : []),
+  ];
+  pills.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'stat-pill';
+    el.innerHTML = `<div class="stat-pill-label">${p.label}</div><div class="stat-pill-value">${p.value}</div><div class="stat-pill-unit">${p.unit}</div>`;
+    frag.appendChild(el);
+  });
+  statsEl.innerHTML = '';
+  statsEl.appendChild(frag);
 
   // Streak banner
   const streakEl = document.getElementById('streak-banner');
@@ -216,13 +262,60 @@ function renderDashboard() {
       </div>`;
   } else { streakEl.innerHTML = ''; }
 
+  // Recent sessions
   const recentEl = document.getElementById('recent-sessions');
-  recentEl.innerHTML = sessions.length === 0
-    ? emptyState('💪','Aucune séance','Appuyez sur + pour commencer')
-    : `<div class="session-cards">${sessions.slice(0,3).map(sessionCardHTML).join('')}</div>`;
+  if (sessions.length === 0) {
+    recentEl.innerHTML = emptyState('💪','Aucune séance','Appuyez sur + pour commencer');
+  } else {
+    const cardsFrag = document.createDocumentFragment();
+    const wrap = document.createElement('div');
+    wrap.className = 'session-cards';
+    sessions.slice(0,3).forEach(s => { wrap.insertAdjacentHTML('beforeend', sessionCardHTML(s)); });
+    cardsFrag.appendChild(wrap);
+    recentEl.innerHTML = '';
+    recentEl.appendChild(cardsFrag);
+  }
+
+  // Suggested next workout
+  renderSuggestion(sessions);
 
   renderHeatmap('week-heatmap-dash', sessions);
   updateDrawerProfile();
+}
+
+// ── NEW: Smart workout suggestion ──────────────────────
+function renderSuggestion(sessions) {
+  const el = document.getElementById('suggestion-block');
+  if (!el) return;
+  if (sessions.length < 3) { el.innerHTML = ''; return; }
+
+  const muscleFreq = {};
+  const cutoff = new Date(Date.now() - 7*86400000);
+  sessions.filter(s => parseLocalDate(s.date) >= cutoff)
+    .forEach(s => s.exercises.forEach(e => {
+      const m = getMuscleForExercise(e.name);
+      muscleFreq[m] = (muscleFreq[m]||0)+1;
+    }));
+
+  // Find least-trained muscle group this week
+  const allMuscles = Object.keys(EXERCISE_LIBRARY);
+  const sorted = allMuscles.sort((a,b) => (muscleFreq[a]||0)-(muscleFreq[b]||0));
+  const suggest = sorted[0];
+  if (!suggest) { el.innerHTML = ''; return; }
+
+  const exList = EXERCISE_LIBRARY[suggest].slice(0,3).join(', ');
+  el.innerHTML = `
+    <div class="suggestion-card" onclick="openNewSessionModal()">
+      <div class="suggestion-header">
+        <div class="suggestion-icon">⚡</div>
+        <div>
+          <div class="suggestion-title">Suggestion du jour</div>
+          <div class="suggestion-muscle">${suggest}</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="suggestion-hint">${exList}…</div>
+    </div>`;
 }
 
 function computeStreak(sessions) {
@@ -233,7 +326,7 @@ function computeStreak(sessions) {
   while (true) {
     const d = isoDate(cur.getTime());
     if (dates.has(d)) { streak++; cur.setDate(cur.getDate()-1); }
-    else if (d === today) { cur.setDate(cur.getDate()-1); } // today not trained yet, don't break streak
+    else if (d === today) { cur.setDate(cur.getDate()-1); }
     else break;
     if (streak > 365) break;
   }
@@ -251,7 +344,7 @@ function sessionVolume(s) {
 }
 
 // ─────────────────────────────────────────────────────
-// SESSIONS LIST + SEARCH
+// SESSIONS LIST + SEARCH  (debounced, DocumentFragment)
 // ─────────────────────────────────────────────────────
 
 let _searchQuery = '';
@@ -260,10 +353,12 @@ function renderSessions() {
   filterSessions(_searchQuery);
 }
 
-function filterSessions(q) {
+const filterSessions = debounce((q) => {
   _searchQuery = q || '';
   const sessions = DB.sessions;
   const el = document.getElementById('all-sessions');
+  if (!el) return;
+
   if (sessions.length === 0) {
     el.innerHTML = emptyState('📋','Aucune séance','Créez votre première séance\nen appuyant sur le bouton +');
     return;
@@ -281,24 +376,51 @@ function filterSessions(q) {
     el.innerHTML = emptyState('🔍','Aucun résultat',`Aucune séance ne correspond\nà "${esc(_searchQuery)}"`);
     return;
   }
-  el.innerHTML = `<div class="session-cards">${filtered.map(sessionCardHTML).join('')}</div>`;
-}
+
+  // Use DocumentFragment + virtual rendering for large lists
+  const frag = document.createDocumentFragment();
+  const wrap = document.createElement('div');
+  wrap.className = 'session-cards';
+
+  // Virtual scroll: render only what's needed (cap at 50 initially; load-more on scroll)
+  const INITIAL_LIMIT = 40;
+  filtered.slice(0, INITIAL_LIMIT).forEach(s => { wrap.insertAdjacentHTML('beforeend', sessionCardHTML(s)); });
+
+  if (filtered.length > INITIAL_LIMIT) {
+    const more = document.createElement('button');
+    more.className = 'load-more-btn';
+    more.textContent = `Afficher ${filtered.length - INITIAL_LIMIT} séances de plus`;
+    more.onclick = () => {
+      filtered.slice(INITIAL_LIMIT).forEach(s => { more.insertAdjacentHTML('beforebegin', sessionCardHTML(s)); });
+      more.remove();
+    };
+    wrap.appendChild(more);
+  }
+
+  frag.appendChild(wrap);
+  el.innerHTML = '';
+  el.appendChild(frag);
+}, 180);
 
 function sessionCardHTML(s) {
+  const isFav = (PROFILE.get('favorites','').split(',').filter(Boolean).includes(s.id));
   const totalSets = s.exercises.reduce((a,e)=>a+e.sets.length,0);
   const vol = Math.round(sessionVolume(s));
   const tags = s.exercises.slice(0,4).map(e=>`<span class="ex-tag">${esc(e.name)}</span>`).join('');
   const more = s.exercises.length>4 ? `<span class="ex-tag">+${s.exercises.length-4}</span>` : '';
   const durStr = s.duration ? `<span class="sc-meta-item"><strong>${s.duration}</strong> min</span>` : '';
   return `
-    <div class="session-card" onclick="showSessionDetail('${s.id}')">
+    <div class="session-card${isFav?' fav':''}" data-action="show-detail" data-id="${s.id}">
       <div class="sc-row1">
         <div class="sc-name">${esc(s.name)}</div>
-        <div class="sc-actions" onclick="event.stopPropagation()">
-          <button class="sc-action" onclick="openEditSession('${s.id}')">
+        <div class="sc-actions">
+          <button class="sc-action fav-btn${isFav?' active':''}" data-action="fav-toggle" data-id="${s.id}" title="Favori">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="${isFav?'var(--gold)':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </button>
+          <button class="sc-action" data-action="edit-session" data-id="${s.id}">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
-          <button class="sc-action danger" onclick="confirmDeleteSession('${s.id}')">
+          <button class="sc-action danger" data-action="del-session" data-id="${s.id}">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
           </button>
         </div>
@@ -315,6 +437,28 @@ function sessionCardHTML(s) {
 }
 
 // ─────────────────────────────────────────────────────
+// FAVORITES
+// ─────────────────────────────────────────────────────
+
+function toggleFavorite(id) {
+  const favs = new Set(PROFILE.get('favorites','').split(',').filter(Boolean));
+  favs.has(id) ? favs.delete(id) : favs.add(id);
+  PROFILE.set('favorites', [...favs].join(','));
+  // Patch just that card without full re-render
+  const card = document.querySelector(`.session-card[data-id="${id}"]`);
+  if (card) {
+    const btn = card.querySelector('.fav-btn');
+    const isFav = favs.has(id);
+    card.classList.toggle('fav', isFav);
+    if (btn) {
+      btn.classList.toggle('active', isFav);
+      btn.querySelector('polygon')?.setAttribute('fill', isFav ? 'var(--gold)' : 'none');
+    }
+  }
+  toast(favs.has(id) ? 'Ajouté aux favoris ⭐' : 'Retiré des favoris');
+}
+
+// ─────────────────────────────────────────────────────
 // SESSION DETAIL
 // ─────────────────────────────────────────────────────
 
@@ -328,15 +472,14 @@ function showSessionDetail(id) {
   const vol = Math.round(sessionVolume(s));
   const maxW = s.exercises.length ? Math.max(...s.exercises.flatMap(e=>e.sets.map(x=>x.w))) : 0;
 
-  // Build PR map to detect PRs per exercise
   const prMap = buildPRMap(DB.sessions);
 
   document.getElementById('detail-top-actions').innerHTML = `
     <div style="display:flex;gap:8px">
-      <button class="icon-btn" onclick="openEditSession('${s.id}')">
+      <button class="icon-btn" data-action="edit-session" data-id="${s.id}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       </button>
-      <button class="icon-btn" style="color:var(--red);border-color:rgba(224,82,82,0.2)" onclick="confirmDeleteSession('${s.id}',true)">
+      <button class="icon-btn" style="color:var(--red);border-color:rgba(224,82,82,0.2)" data-action="del-session-detail" data-id="${s.id}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
       </button>
     </div>`;
@@ -347,12 +490,14 @@ function showSessionDetail(id) {
     const isPRExercise = prMap[e.name] && prMap[e.name].w === eMax && prMap[e.name].date === s.date;
     const rows = e.sets.map((set,i) => {
       const isSetPR = set.w === eMax && isPRExercise;
+      const intensity = eMax > 0 ? Math.round((set.w / eMax) * 100) : 0;
       return `
         <div class="set-row-display">
           <div class="set-num-disp">${i+1}</div>
           <div class="set-weight">${set.w} kg${isSetPR && set.w===eMax ? '<span class="set-pr-badge">PR</span>' : ''}</div>
           <div class="set-reps">${set.r} reps</div>
           <div class="set-vol">${Math.round(set.w*set.r)} kg</div>
+          <div class="set-intensity-bar" style="--pct:${intensity}%"></div>
         </div>
         ${set.n ? `<div class="set-note-row">"${esc(set.n)}"</div>` : ''}`;
     }).join('');
@@ -365,6 +510,9 @@ function showSessionDetail(id) {
         <div class="sets-list">${rows}</div>
       </div>`;
   }).join('');
+
+  // Mini progress chart for last 5 sessions of same exercises
+  const progressHTML = buildDetailProgressCharts(s);
 
   document.getElementById('session-detail-content').innerHTML = `
     <div class="detail-hero">
@@ -380,20 +528,37 @@ function showSessionDetail(id) {
       </div>
     </div>
     <div class="detail-share-strip">
-      <button class="detail-share-btn" onclick="openShareCard('${s.id}')">
+      <button class="detail-share-btn" data-action="share-card" data-id="${s.id}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
         Partager la séance
       </button>
     </div>
     <div class="section-header"><span class="section-title">Exercices</span></div>
     <div class="exercise-blocks">${exHTML}</div>
+    ${progressHTML ? `<div class="section-header"><span class="section-title">Progression récente</span></div><div style="padding:0 14px">${progressHTML}</div>` : ''}
     <div style="height:20px"></div>`;
 
   showPage('detail');
 }
 
+// NEW: mini inline progress charts per exercise
+function buildDetailProgressCharts(s) {
+  const allSessions = DB.sessions;
+  const result = [];
+  s.exercises.slice(0,4).forEach(e => {
+    const data = buildExData(allSessions, e.name).slice(-6);
+    if (data.length >= 2) {
+      result.push(`<div class="mini-progress-card">
+        <div class="mini-progress-title">${esc(e.name)}</div>
+        ${buildLineChart(data.map(d=>({x:d.date,y:d.maxW})))}
+      </div>`);
+    }
+  });
+  return result.length ? `<div class="mini-progress-wrap">${result.join('')}</div>` : '';
+}
+
 // ─────────────────────────────────────────────────────
-// SHARE CARD (Canvas — style Strava)
+// SHARE CARD (Canvas)
 // ─────────────────────────────────────────────────────
 
 function openShareCard(id) {
@@ -412,17 +577,15 @@ function openShareCard(id) {
     </button>
     <button class="btn btn-secondary" onclick="closeSheet()">Fermer</button>`;
   openSheet();
-  // Generate after sheet animation
   setTimeout(() => generateShareCanvas(s), 300);
 }
 
 function generateShareCanvas(s) {
   const canvas = document.getElementById('share-canvas');
-  const W = 1080, H = 1350; // 4:5 ratio like Instagram
+  const W = 1080, H = 1350;
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // Background gradient
   const bg = ctx.createLinearGradient(0, 0, W, H);
   bg.addColorStop(0, '#0d0d0f');
   bg.addColorStop(0.5, '#131315');
@@ -430,13 +593,10 @@ function generateShareCanvas(s) {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Subtle grain texture (noise overlay)
+  // Grain
   ctx.fillStyle = 'rgba(255,255,255,0.015)';
-  for (let i=0; i<8000; i++) {
-    ctx.fillRect(Math.random()*W, Math.random()*H, 1, 1);
-  }
+  for (let i=0; i<8000; i++) ctx.fillRect(Math.random()*W, Math.random()*H, 1, 1);
 
-  // Gold accent top bar
   const goldGrad = ctx.createLinearGradient(0, 0, W, 0);
   goldGrad.addColorStop(0, '#c9aa6f');
   goldGrad.addColorStop(0.6, '#c9aa6f');
@@ -444,39 +604,30 @@ function generateShareCanvas(s) {
   ctx.fillStyle = goldGrad;
   ctx.fillRect(0, 0, W, 6);
 
-  // App name
   ctx.fillStyle = '#ededef';
   ctx.font = 'bold 48px "DM Mono", monospace';
-  ctx.letterSpacing = '8px';
   ctx.fillText('STRONG', 72, 100);
   ctx.fillStyle = '#c9aa6f';
   ctx.fillText('.BOY', 72 + ctx.measureText('STRONG').width + 4, 100);
-  ctx.letterSpacing = '0px';
 
-  // Session name
   ctx.fillStyle = '#ededef';
-  ctx.font = 'bold 110px "DM Mono", monospace';
   const nameText = s.name.toUpperCase();
-  const maxNameW = W - 144;
   let nameFontSize = 110;
   ctx.font = `bold ${nameFontSize}px "DM Mono", monospace`;
-  while (ctx.measureText(nameText).width > maxNameW && nameFontSize > 48) {
+  while (ctx.measureText(nameText).width > W - 144 && nameFontSize > 48) {
     nameFontSize -= 4;
     ctx.font = `bold ${nameFontSize}px "DM Mono", monospace`;
   }
   ctx.fillText(nameText, 72, 210);
 
-  // Date
   ctx.fillStyle = '#4e4e58';
   ctx.font = '38px "DM Mono", monospace';
   ctx.fillText(formatDate(s.date).toUpperCase(), 72, 278);
 
-  // Divider
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(72, 310); ctx.lineTo(W-72, 310); ctx.stroke();
 
-  // Stats row (4 blocks)
   const vol = Math.round(sessionVolume(s));
   const totalSets = s.exercises.reduce((a,e)=>a+e.sets.length,0);
   const maxW2 = s.exercises.length ? Math.max(...s.exercises.flatMap(e=>e.sets.map(x=>x.w))) : 0;
@@ -498,27 +649,21 @@ function generateShareCanvas(s) {
     ctx.fillText(st.label, x, 445);
   });
 
-  // Divider
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(72, 480); ctx.lineTo(W-72, 480); ctx.stroke();
 
-  // Exercise list
   const exList = s.exercises.slice(0, 6);
   const exStartY = 530;
   const exRowH = 110;
   exList.forEach((ex, i) => {
     const y = exStartY + i * exRowH;
     const exMax = Math.max(...ex.sets.map(x=>x.w));
-    const exVol = Math.round(ex.sets.reduce((a,x)=>a+x.w*x.r,0));
-
-    // Row background
     ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
     ctx.beginPath();
     roundRect(ctx, 72, y-16, W-144, exRowH-8, 16);
     ctx.fill();
 
-    // Exercise name
     ctx.fillStyle = '#ededef';
     ctx.font = `500 46px "DM Mono", monospace`;
     let exName = ex.name;
@@ -526,13 +671,11 @@ function generateShareCanvas(s) {
     if (exName !== ex.name) exName += '…';
     ctx.fillText(exName, 96, y + 28);
 
-    // Sets summary — draw each set as a small pill
     const setsStr = ex.sets.map(s=>`${s.w}×${s.r}`).slice(0,5).join('  ');
     ctx.fillStyle = '#4e4e58';
     ctx.font = `30px "DM Mono", monospace`;
     ctx.fillText(setsStr, 96, y + 68);
 
-    // Max weight badge
     ctx.fillStyle = 'rgba(201,170,111,0.15)';
     ctx.beginPath();
     roundRect(ctx, W-240, y+10, 168, 46, 10);
@@ -550,7 +693,6 @@ function generateShareCanvas(s) {
     ctx.fillText(`+ ${s.exercises.length - 6} exercice(s) supplémentaire(s)`, 72, exStartY + 6*exRowH + 20);
   }
 
-  // Note
   if (s.note) {
     const noteY = Math.max(exStartY + exList.length * exRowH + 60, H - 280);
     ctx.fillStyle = 'rgba(201,170,111,0.08)';
@@ -566,12 +708,10 @@ function generateShareCanvas(s) {
     noteLines.slice(0,2).forEach((line, li) => ctx.fillText(line, 96, noteY + 40 + li*46));
   }
 
-  // Bottom bar
   const barY = H - 90;
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(72, barY); ctx.lineTo(W-72, barY); ctx.stroke();
-
   ctx.fillStyle = '#4e4e58';
   ctx.font = `28px "DM Mono", monospace`;
   ctx.fillText('strongboy.app', 72, H-44);
@@ -579,7 +719,6 @@ function generateShareCanvas(s) {
   ctx.fillText(new Date().getFullYear(), W-72, H-44);
   ctx.textAlign = 'left';
 
-  // Display preview
   const dataUrl = canvas.toDataURL('image/png');
   const img = document.getElementById('share-img');
   const gen = document.getElementById('share-generating');
@@ -612,7 +751,7 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function wrapText(ctx, text, maxWidth, fontSize) {
+function wrapText(ctx, text, maxWidth) {
   const words = text.split(' ');
   const lines = [];
   let line = '';
@@ -676,6 +815,23 @@ function renderSessionForm(s) {
         <input class="form-input" type="number" id="f-duration" inputmode="numeric" placeholder="60" value="${s&&s.duration?s.duration:''}">
       </div>
     </div>
+    <div class="form-row-2">
+      <div class="form-group">
+        <label class="form-label">Ressenti</label>
+        <select class="form-input" id="f-feeling">
+          <option value="">—</option>
+          <option value="5" ${s&&s.feeling===5?'selected':''}>🔥 Excellent</option>
+          <option value="4" ${s&&s.feeling===4?'selected':''}>💪 Bien</option>
+          <option value="3" ${s&&s.feeling===3?'selected':''}>😐 Moyen</option>
+          <option value="2" ${s&&s.feeling===2?'selected':''}>😓 Fatiguée</option>
+          <option value="1" ${s&&s.feeling===1?'selected':''}>😵 Épuisée</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">RPE global</label>
+        <input class="form-input" type="number" id="f-rpe" inputmode="numeric" placeholder="7" min="1" max="10" value="${s&&s.rpe?s.rpe:''}">
+      </div>
+    </div>
     <div class="form-group">
       <label class="form-label">Note rapide</label>
       <input class="form-input" id="f-note" placeholder="Ressenti, conditions…" value="${s?esc(s.note||''):''}" autocomplete="off">
@@ -702,18 +858,21 @@ function renderFormExercises() {
     container.innerHTML = `<div style="text-align:center;padding:20px 0;color:var(--text-3);font-family:var(--font-mono);font-size:11px">Aucun exercice. Appuyez sur + pour en ajouter.</div>`;
     return;
   }
-  container.innerHTML = _exercises.map((ex, ei) => {
+
+  // Build with DocumentFragment to avoid repeated layout thrash
+  const frag = document.createDocumentFragment();
+  _exercises.forEach((ex, ei) => {
     const lastData = ex.name ? getLastSetsForExercise(ex.name, _editId) : null;
     let prevHint = '';
     if (lastData && ex.name) {
       const maxW = Math.max(...lastData.sets.map(s=>s.w));
-      prevHint = `<div style="font-family:var(--font-mono);font-size:9px;color:var(--gold);margin:0 0 8px;display:flex;align-items:center;gap:8px">
+      prevHint = `<div class="prev-hint">
         <span>↑ Dernière fois (${formatDateShort(lastData.date)}) : ${maxW}kg × ${lastData.sets[0].r} reps</span>
         <button class="timer-start-btn" onclick="startTimer(${SETTINGS.get('defaultRest',90)})">⏱ Repos</button>
       </div>`;
     }
 
-    const sets = ex.sets.map((set, si) => {
+    const setsRows = ex.sets.map((set, si) => {
       const lastSet = lastData ? (lastData.sets[si] || lastData.sets[lastData.sets.length-1]) : null;
       const wPh = lastSet && !set.w ? lastSet.w : '';
       const rPh = lastSet && !set.r ? lastSet.r : '';
@@ -723,27 +882,31 @@ function renderFormExercises() {
           <input class="form-input" type="number" step="0.5" min="0" inputmode="decimal" placeholder="${wPh}" value="${set.w||''}" oninput="_exercises[${ei}].sets[${si}].w=parseFloat(this.value)||0">
           <input class="form-input" type="number" min="0" inputmode="numeric" placeholder="${rPh}" value="${set.r||''}" oninput="_exercises[${ei}].sets[${si}].r=parseInt(this.value)||0">
           <input class="form-input" placeholder="note" value="${esc(set.n||'')}" oninput="_exercises[${ei}].sets[${si}].n=this.value" autocomplete="off">
-          <button class="rm-btn" onclick="removeSet(${ei},${si})">−</button>
+          <button class="rm-btn" data-action="rm-set" data-idx="${ei}" data-si="${si}">−</button>
         </div>`;
     }).join('');
 
-    return `
-      <div class="form-ex-block">
-        <div class="form-ex-header">
-          <div class="ex-name-field" onclick="openPicker(${ei})">
-            ${ex.name ? `<span class="ex-name-text">${esc(ex.name)}</span>` : '<span class="ex-name-placeholder">Choisir un exercice…</span>'}
-            <svg class="ex-name-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </div>
-          <button class="rm-btn" onclick="removeExercise(${ei})">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+    const wrapper = document.createElement('div');
+    wrapper.className = 'form-ex-block';
+    wrapper.innerHTML = `
+      <div class="form-ex-header">
+        <div class="ex-name-field" data-action="picker-open" data-idx="${ei}">
+          ${ex.name ? `<span class="ex-name-text">${esc(ex.name)}</span>` : '<span class="ex-name-placeholder">Choisir un exercice…</span>'}
+          <svg class="ex-name-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        ${prevHint}
-        <div class="form-set-header"><div></div><div class="form-label">Poids kg</div><div class="form-label">Reps</div><div class="form-label">Note</div><div></div></div>
-        ${sets}
-        <button class="btn btn-ghost" style="width:auto;padding:6px 0;margin-top:4px" onclick="addSet(${ei})">+ Série</button>
-      </div>`;
-  }).join('');
+        <button class="rm-btn" data-action="rm-ex" data-idx="${ei}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      ${prevHint}
+      <div class="form-set-header"><div></div><div class="form-label">Poids kg</div><div class="form-label">Reps</div><div class="form-label">Note</div><div></div></div>
+      ${setsRows}
+      <button class="btn btn-ghost" style="width:auto;padding:6px 0;margin-top:4px" data-action="add-set" data-idx="${ei}">+ Série</button>`;
+    frag.appendChild(wrapper);
+  });
+
+  container.innerHTML = '';
+  container.appendChild(frag);
 }
 
 function addExercise() {
@@ -764,11 +927,17 @@ function saveSession() {
   const note=(document.getElementById('f-note')?.value||'').trim();
   const durVal=document.getElementById('f-duration')?.value;
   const duration=durVal?parseInt(durVal)||0:(_sessionStartTime?Math.round((Date.now()-_sessionStartTime)/60000):0);
+  const feelingVal = document.getElementById('f-feeling')?.value;
+  const feeling = feelingVal ? parseInt(feelingVal) : null;
+  const rpeVal = document.getElementById('f-rpe')?.value;
+  const rpe = rpeVal ? parseInt(rpeVal) : null;
   if(!name){toast('Entrez un nom de séance','error');return;}
   if(!date){toast('Choisissez une date','error');return;}
   const validEx=_exercises.filter(e=>e.name.trim());
   if(!validEx.length){toast('Ajoutez au moins 1 exercice','error');return;}
   const session={id:_editId||uid(),name,date,note,duration,exercises:validEx};
+  if(feeling) session.feeling = feeling;
+  if(rpe) session.rpe = rpe;
   if(_editId){DB.update(session);toast('Séance modifiée ✓');}
   else{DB.add(session);toast('Séance enregistrée ✓');}
   closeSheet();
@@ -806,7 +975,8 @@ function closePicker() {
   document.getElementById('picker-overlay').classList.remove('open');
   document.getElementById('picker-sheet').classList.remove('open');
 }
-function filterPicker(query){ renderPickerItems(query.trim()); }
+
+const filterPicker = debounce((query) => renderPickerItems(query.trim()), 150);
 
 function renderPickerItems(query) {
   const body = document.getElementById('picker-body');
@@ -815,22 +985,25 @@ function renderPickerItems(query) {
   const recent = [];
   DB.sessions.forEach(s=>s.exercises.forEach(e=>{if(!seen.has(e.name)){seen.add(e.name);recent.push(e.name);}}));
 
+  const frag = document.createDocumentFragment();
+
   if (!q) {
-    let html = '';
     if (recent.length > 0) {
-      html += `<div class="picker-category">Récemment utilisés</div>`;
-      html += recent.slice(0,8).map(n=>pickerItemHTML(n)).join('');
+      frag.appendChild(pickerCatEl('Récemment utilisés'));
+      recent.slice(0,8).forEach(n => frag.appendChild(pickerItemEl(n)));
     }
     Object.entries(EXERCISE_LIBRARY).forEach(([cat,names])=>{
-      html += `<div class="picker-category">${esc(cat)}</div>`;
-      html += names.map(n=>pickerItemHTML(n)).join('');
+      frag.appendChild(pickerCatEl(cat));
+      names.forEach(n => frag.appendChild(pickerItemEl(n)));
     });
     const customs = CUSTOM_EX.list;
     if (customs.length > 0) {
-      html += `<div class="picker-category">Exercices personnalisés</div>`;
-      html += customs.map(n=>pickerItemHTML(n)).join('');
+      frag.appendChild(pickerCatEl('Exercices personnalisés'));
+      customs.forEach(n => frag.appendChild(pickerItemEl(n)));
     }
-    body.innerHTML = html; return;
+    body.innerHTML = '';
+    body.appendChild(frag);
+    return;
   }
 
   const allNames = getAllKnownExercises();
@@ -838,32 +1011,46 @@ function renderPickerItems(query) {
   if (!matches.length) {
     body.innerHTML = `
       <div class="picker-no-results">Aucun résultat pour "${esc(query)}"</div>
-      <div class="picker-item create" onclick="createCustomExercise('${esc(query)}')">
+      <div class="picker-item create" data-action="create-ex" data-query="${esc(query)}">
         <div class="picker-item-name"><div class="picker-create-icon">+</div>Créer "${esc(query)}"</div>
       </div>`;
     return;
   }
-  let html = matches.map(n=>pickerItemHTML(n)).join('');
+  matches.forEach(n => frag.appendChild(pickerItemEl(n)));
   if (!allNames.some(n=>normalizeStr(n)===q)) {
-    html += `<div class="picker-item create" onclick="createCustomExercise('${esc(query)}')">
-      <div class="picker-item-name"><div class="picker-create-icon">+</div>Créer "${esc(query)}"</div>
-    </div>`;
+    const createEl = document.createElement('div');
+    createEl.className = 'picker-item create';
+    createEl.setAttribute('data-action','create-ex');
+    createEl.setAttribute('data-query', esc(query));
+    createEl.innerHTML = `<div class="picker-item-name"><div class="picker-create-icon">+</div>Créer "${esc(query)}"</div>`;
+    frag.appendChild(createEl);
   }
-  body.innerHTML = html;
+  body.innerHTML = '';
+  body.appendChild(frag);
 }
 
-function pickerItemHTML(name) {
+function pickerCatEl(label) {
+  const el = document.createElement('div');
+  el.className = 'picker-category';
+  el.textContent = label;
+  return el;
+}
+
+function pickerItemEl(name) {
   const muscle = EX_TO_MUSCLE[name] || '';
   const last = getLastSetsForExercise(name);
   const prevText = last ? `${Math.max(...last.sets.map(s=>s.w))} kg × ${last.sets[0].r}` : '';
-  return `
-    <div class="picker-item" onclick="selectExercise('${esc(name)}')">
-      <div class="picker-item-left">
-        <div class="picker-item-name">${esc(name)}</div>
-        ${prevText ? `<div class="picker-item-prev">↑ ${prevText}</div>` : ''}
-      </div>
-      ${muscle ? `<div class="picker-item-muscle">${esc(muscle)}</div>` : ''}
-    </div>`;
+  const el = document.createElement('div');
+  el.className = 'picker-item';
+  el.setAttribute('data-action','pick-ex');
+  el.setAttribute('data-name', name);
+  el.innerHTML = `
+    <div class="picker-item-left">
+      <div class="picker-item-name">${esc(name)}</div>
+      ${prevText ? `<div class="picker-item-prev">↑ ${prevText}</div>` : ''}
+    </div>
+    ${muscle ? `<div class="picker-item-muscle">${esc(muscle)}</div>` : ''}`;
+  return el;
 }
 
 function selectExercise(name) {
@@ -885,59 +1072,65 @@ function createCustomExercise(name) {
 }
 
 // ─────────────────────────────────────────────────────
-// REST TIMER
+// REST TIMER  (rAF-based, no setInterval)
 // ─────────────────────────────────────────────────────
 
-let _timerInterval = null;
-let _timerRemaining = 0;
+let _timerRaf = null;
+let _timerEndAt = 0;   // absolute timestamp when timer expires
 let _timerTotal = 0;
-const CIRCUMFERENCE = 364.4; // 2π×58
+let _timerRunning = false;
+const CIRCUMFERENCE = 364.4;
 
 function startTimer(seconds) {
   stopTimer(true);
   _timerTotal = seconds;
-  _timerRemaining = seconds;
+  _timerEndAt = performance.now() + seconds * 1000;
+  _timerRunning = true;
   document.getElementById('timer-overlay').classList.add('active');
-  updateTimerDisplay();
-  _timerInterval = setInterval(() => {
-    _timerRemaining--;
-    updateTimerDisplay();
-    if (_timerRemaining <= 0) {
-      stopTimer(true);
-      vibrateDevice([200, 100, 200]);
-      toast('Repos terminé ! 💪');
-    }
-  }, 1000);
+  _timerTick();
 }
 
-function setTimerPreset(seconds) {
-  stopTimer(true);
-  startTimer(seconds);
+function _timerTick() {
+  if (!_timerRunning) return;
+  const remaining = Math.max(0, (_timerEndAt - performance.now()) / 1000);
+  _renderTimer(remaining);
+  if (remaining <= 0) {
+    _timerRunning = false;
+    document.getElementById('timer-overlay').classList.remove('active');
+    vibrateDevice([200, 100, 200]);
+    toast('Repos terminé ! 💪');
+    return;
+  }
+  _timerRaf = requestAnimationFrame(_timerTick);
 }
+
+function _renderTimer(remaining) {
+  const secs = Math.ceil(remaining);
+  const mins = Math.floor(secs / 60);
+  const sec  = secs % 60;
+  document.getElementById('timer-display').textContent =
+    `${String(mins).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  const prog = document.getElementById('timer-progress');
+  if (prog && _timerTotal > 0) {
+    const ratio = remaining / _timerTotal;
+    prog.style.strokeDashoffset = CIRCUMFERENCE * (1 - ratio);
+    prog.classList.toggle('urgent', remaining <= 10);
+  }
+}
+
+function setTimerPreset(seconds) { startTimer(seconds); }
 
 function stopTimer(silent=false) {
-  if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
+  _timerRunning = false;
+  if (_timerRaf) { cancelAnimationFrame(_timerRaf); _timerRaf = null; }
   if (!silent) document.getElementById('timer-overlay').classList.remove('active');
-  _timerRemaining = 0; _timerTotal = 0;
+  _timerEndAt = 0; _timerTotal = 0;
 }
 
 function adjustTimer(delta) {
-  _timerRemaining = Math.max(5, _timerRemaining + delta);
-  if (_timerTotal > 0) _timerTotal = Math.max(_timerTotal, _timerRemaining);
-  updateTimerDisplay();
-}
-
-function updateTimerDisplay() {
-  const mins = Math.floor(_timerRemaining / 60);
-  const secs = _timerRemaining % 60;
-  document.getElementById('timer-display').textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-  const prog = document.getElementById('timer-progress');
-  if (prog && _timerTotal > 0) {
-    const ratio = _timerRemaining / _timerTotal;
-    const offset = CIRCUMFERENCE * (1 - ratio);
-    prog.style.strokeDashoffset = offset;
-    prog.classList.toggle('urgent', _timerRemaining <= 10);
-  }
+  if (!_timerRunning) return;
+  _timerEndAt += delta * 1000;
+  _timerTotal = Math.max(_timerTotal, (_timerEndAt - performance.now()) / 1000);
 }
 
 function vibrateDevice(pattern) {
@@ -978,7 +1171,13 @@ function renderPresets() {
     el.innerHTML = emptyState('📐','Aucun preset','Créez des modèles de séance réutilisables\nen 1 seul tap');
     return;
   }
-  el.innerHTML = `<div class="preset-cards">${presets.map(presetCardHTML).join('')}</div>`;
+  const frag = document.createDocumentFragment();
+  const wrap = document.createElement('div');
+  wrap.className = 'preset-cards';
+  presets.forEach(p => { wrap.insertAdjacentHTML('beforeend', presetCardHTML(p)); });
+  frag.appendChild(wrap);
+  el.innerHTML = '';
+  el.appendChild(frag);
 }
 
 function presetCardHTML(p) {
@@ -993,13 +1192,13 @@ function presetCardHTML(p) {
       </div>
       <div class="preset-ex-list">${exTags}${more}</div>
       <div class="preset-card-actions">
-        <button class="preset-action primary" onclick="openNewSessionModal('${p.id}')">
+        <button class="preset-action primary" data-action="start-preset" data-id="${p.id}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer
         </button>
-        <button class="preset-action" onclick="openEditPreset('${p.id}')">
+        <button class="preset-action" data-action="edit-preset" data-id="${p.id}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Modifier
         </button>
-        <button class="preset-action danger" onclick="confirmDeletePreset('${p.id}')">
+        <button class="preset-action danger" data-action="del-preset" data-id="${p.id}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg> Suppr.
         </button>
       </div>
@@ -1039,9 +1238,12 @@ function renderPresetForm(p) {
 function renderPresetFormExercises() {
   const c=document.getElementById('preset-form-exercises'); if(!c) return;
   if(!_presetExercises.length){c.innerHTML=`<div style="text-align:center;padding:20px 0;color:var(--text-3);font-family:var(--font-mono);font-size:11px">Aucun exercice.</div>`;return;}
-  c.innerHTML=_presetExercises.map((pe,i)=>`
-    <div class="preset-ex-form-item">
-      <div class="ex-name-field" style="flex:1;min-height:44px" onclick="openPresetPicker(${i})">
+  const frag = document.createDocumentFragment();
+  _presetExercises.forEach((pe,i)=>{
+    const el = document.createElement('div');
+    el.className = 'preset-ex-form-item';
+    el.innerHTML = `
+      <div class="ex-name-field" style="flex:1;min-height:44px" data-action="preset-picker" data-idx="${i}">
         ${pe.name?`<span class="ex-name-text">${esc(pe.name)}</span>`:`<span class="ex-name-placeholder">Choisir…</span>`}
         <svg class="ex-name-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
@@ -1051,10 +1253,13 @@ function renderPresetFormExercises() {
           oninput="_presetExercises[${i}].defaultSets=parseInt(this.value)||3"
           style="width:64px;padding:8px 10px;font-size:15px;text-align:center">
       </div>
-      <button class="rm-btn" onclick="removePresetExercise(${i})">
+      <button class="rm-btn" data-action="rm-preset-ex" data-idx="${i}">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>`).join('');
+      </button>`;
+    frag.appendChild(el);
+  });
+  c.innerHTML='';
+  c.appendChild(frag);
 }
 function addPresetExercise(){ _presetExercises.push({name:'',defaultSets:3}); renderPresetFormExercises(); setTimeout(()=>document.getElementById('sheet-body').scrollTo({top:99999,behavior:'smooth'}),50); }
 function removePresetExercise(i){ _presetExercises.splice(i,1); renderPresetFormExercises(); }
@@ -1094,9 +1299,20 @@ function renderProgress() {
   const selected = window._pEx || exNames[0] || '';
   const exData = buildExData(sessions, selected);
 
+  // Volume over time (monthly)
+  const volData = buildVolumeData(sessions);
+  const feelingData = buildFeelingData(sessions);
+
   el.innerHTML = `
     <div class="section-header"><span class="section-title">Séances / semaine</span></div>
     <div class="progress-section"><div class="chart-card">${buildBarChart(weeklyData)}</div></div>
+
+    <div class="section-header"><span class="section-title">Volume total / semaine (kg)</span></div>
+    <div class="progress-section"><div class="chart-card">${buildLineChart(volData)}</div></div>
+
+    ${feelingData.length>=2 ? `
+    <div class="section-header"><span class="section-title">Ressenti (RPE moyen)</span></div>
+    <div class="progress-section"><div class="chart-card">${buildLineChart(feelingData)}</div></div>` : ''}
 
     <div class="section-header"><span class="section-title">Muscles — 7 jours</span></div>
     <div class="progress-section"><div class="muscle-grid">${buildMuscleRows(muscleData,7)}</div></div>
@@ -1105,7 +1321,7 @@ function renderProgress() {
     <div class="progress-section"><div class="muscle-grid">${buildMuscleRows(muscleData,30)}</div></div>
 
     <div class="section-header"><span class="section-title">Progression par exercice</span></div>
-    <div class="ex-selector-scroll">${exNames.slice(0,15).map(n=>`<button class="ex-sel-btn ${n===selected?'active':''}" onclick="selectPEx('${esc(n)}')">${esc(n)}</button>`).join('')}</div>
+    <div class="ex-selector-scroll">${exNames.slice(0,15).map(n=>`<button class="ex-sel-btn ${n===selected?'active':''}" data-action="select-pex" data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>
     ${exData.length < 2
       ? `<div class="progress-section"><div style="color:var(--text-3);font-family:var(--font-mono);font-size:11px;padding:10px 0">Données insuffisantes.</div></div>`
       : `<div class="progress-section">
@@ -1115,7 +1331,57 @@ function renderProgress() {
 
     <div class="section-header"><span class="section-title">Records personnels</span></div>
     <div class="progress-section">${buildPRListHTML(sessions)}</div>
+
+    <div class="section-header"><span class="section-title">Calendrier d'activité</span></div>
+    <div class="progress-section">${buildActivityCalendar(sessions)}</div>
+
     <div style="height:20px"></div>`;
+}
+
+// NEW: full 12-week activity calendar
+function buildActivityCalendar(sessions) {
+  const dateSet = new Set(sessions.map(s => s.date));
+  const today = new Date(); today.setHours(0,0,0,0);
+  const WEEKS = 12;
+  const DAYS = ['L','M','M','J','V','S','D'];
+
+  let html = '<div class="activity-calendar">';
+  html += '<div class="ac-day-labels">' + DAYS.map(d=>`<div class="ac-label">${d}</div>`).join('') + '</div>';
+  html += '<div class="ac-grid">';
+
+  for (let w = WEEKS-1; w >= 0; w--) {
+    html += '<div class="ac-col">';
+    for (let d = 0; d < 7; d++) {
+      const date = new Date(today.getTime() - ((w*7 + (6-d)) * 86400000));
+      const iso = isoDate(date.getTime());
+      const active = dateSet.has(iso);
+      const isToday = iso === isoDate(today.getTime());
+      html += `<div class="ac-cell${active?' active':''}${isToday?' today':''}" title="${iso}"></div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div></div>';
+  return `<div class="chart-card">${html}</div>`;
+}
+
+// NEW: volume per week chart data
+function buildVolumeData(sessions) {
+  const now = new Date(); now.setHours(0,0,0,0);
+  return Array.from({length:8},(_,i)=>{
+    const weeksAgo=7-i;
+    const wkMon=getMondayOfWeek(new Date(now.getTime()-weeksAgo*7*86400000));
+    const wkSun=new Date(wkMon.getTime()+7*86400000);
+    const vol=Math.round(sessions.filter(s=>{const d=parseLocalDate(s.date);return d>=wkMon&&d<wkSun;}).reduce((a,s)=>a+sessionVolume(s),0));
+    return {x:isoDate(wkMon.getTime()),y:vol};
+  });
+}
+
+// NEW: average RPE / feeling per session
+function buildFeelingData(sessions) {
+  return [...sessions].reverse()
+    .filter(s=>s.rpe||s.feeling)
+    .slice(-10)
+    .map(s=>({x:s.date,y:s.rpe||(s.feeling?s.feeling*2:0)}));
 }
 
 function selectPEx(name){ window._pEx=name; renderProgress(); }
@@ -1196,7 +1462,7 @@ function buildBarChart(data) {
 }
 
 function buildLineChart(points) {
-  if(points.length<2) return '<div style="color:var(--text-3);font-size:12px">—</div>';
+  if(!points||points.length<2) return '<div style="color:var(--text-3);font-size:12px">—</div>';
   const W=320,H=100,pad={t:20,r:14,b:22,l:36},cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
   const vals=points.map(p=>p.y),minY=Math.min(...vals)*0.94,maxY=Math.max(...vals)*1.06,rangeY=maxY-minY||1;
   const coords=points.map((p,i)=>({x:pad.l+(i/(points.length-1))*cW,y:pad.t+cH-((p.y-minY)/rangeY)*cH,val:p.y}));
@@ -1243,17 +1509,28 @@ function renderHeatmap(containerId, sessions) {
   const today=new Date(); today.setHours(0,0,0,0);
   const sessionDates=new Set(sessions.map(s=>s.date));
   const DAYS=['L','M','M','J','V','S','D'];
-  const cells=Array.from({length:7},(_,i)=>{
+  const frag = document.createDocumentFragment();
+  const wrap = document.createElement('div'); wrap.className='week-heatmap';
+  const inner = document.createElement('div'); inner.className='heatmap-wrap';
+  const labelsDiv = document.createElement('div'); labelsDiv.className='heatmap-days-labels';
+  const daysDiv = document.createElement('div'); daysDiv.className='heatmap-days';
+
+  for(let i=0;i<7;i++){
     const d=new Date(today.getTime()-(6-i)*86400000);
     const iso=isoDate(d.getTime());
-    return `<div class="hm-day ${sessionDates.has(iso)?'active':''} ${d.getTime()===today.getTime()?'today':''}"></div>`;
-  }).join('');
-  const labels=Array.from({length:7},(_,i)=>{
-    const d=new Date(today.getTime()-(6-i)*86400000);
     const dow=d.getDay();
-    return `<div class="hm-day-label">${DAYS[dow===0?6:dow-1]}</div>`;
-  }).join('');
-  el.innerHTML=`<div class="week-heatmap"><div class="heatmap-wrap"><div class="heatmap-days-labels">${labels}</div><div class="heatmap-days">${cells}</div></div></div>`;
+
+    const lbl=document.createElement('div'); lbl.className='hm-day-label'; lbl.textContent=DAYS[dow===0?6:dow-1];
+    labelsDiv.appendChild(lbl);
+
+    const cell=document.createElement('div');
+    cell.className=`hm-day${sessionDates.has(iso)?' active':''}${d.getTime()===today.getTime()?' today':''}`;
+    daysDiv.appendChild(cell);
+  }
+  inner.appendChild(labelsDiv); inner.appendChild(daysDiv);
+  wrap.appendChild(inner); frag.appendChild(wrap);
+  el.innerHTML='';
+  el.appendChild(frag);
 }
 
 // ─────────────────────────────────────────────────────
@@ -1287,46 +1564,52 @@ function renderProfileBody() {
   const bodyEntries=BODY_LOG.entries.slice(0,8).reverse();
   const weightChart=bodyEntries.length>=2?buildLineChart(bodyEntries.map(e=>({x:e.date,y:e.weight||0})).filter(p=>p.y>0)):'';
 
+  // BMI calculator
+  const height = parseFloat(p.height) || 0;
+  const weight = latest.weight || 0;
+  let bmiHTML = '';
+  if (height && weight) {
+    const bmi = (weight / Math.pow(height/100, 2)).toFixed(1);
+    const bmiLabel = bmi < 18.5 ? 'Insuffisance pondérale' : bmi < 25 ? 'Poids normal' : bmi < 30 ? 'Surpoids' : 'Obésité';
+    bmiHTML = `<div class="bmi-block"><span class="bmi-val">${bmi}</span> <span class="bmi-label">IMC — ${bmiLabel}</span></div>`;
+  }
+
   document.getElementById('sheet-body').innerHTML=`
     <div class="profile-avatar-section">
       <div class="profile-big-avatar">${initials}</div>
       <div class="profile-avatar-name">${esc(name||'Athlète')}</div>
+      ${bmiHTML}
     </div>
     <div class="profile-stats-strip">
       <div class="profile-stat-block"><div class="profile-stat-val">${sessions.length}</div><div class="profile-stat-lbl">Séances</div></div>
-      <div class="profile-stat-block"><div class="profile-stat-val">${fmtNum(totalVol)}</div><div class="profile-stat-lbl">kg vol.</div></div>
-      <div class="profile-stat-block"><div class="profile-stat-val">${latest.weight||'—'}</div><div class="profile-stat-lbl">kg poids</div></div>
+      <div class="profile-stat-block"><div class="profile-stat-val">${fmtNum(totalVol)}</div><div class="profile-stat-lbl">kg soulevés</div></div>
+      <div class="profile-stat-block"><div class="profile-stat-val">${computeStreak(sessions)}</div><div class="profile-stat-lbl">Streak</div></div>
     </div>
-    <div class="form-group"><label class="form-label">Prénom / Pseudo</label><input class="form-input" id="prof-name" value="${esc(name)}" placeholder="Votre nom" autocomplete="off"></div>
+    ${weightChart ? `<div style="margin-bottom:16px"><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:8px">Évolution du poids</div><div class="chart-card">${weightChart}</div></div>` : ''}
+    <div class="form-group"><label class="form-label">Nom</label><input class="form-input" id="prof-name" value="${esc(name)}" autocomplete="off"></div>
     <div class="form-row-2">
-      <div class="form-group"><label class="form-label">Taille (cm)</label><input class="form-input" type="number" id="prof-height" value="${p.height||''}" placeholder="180" inputmode="numeric"></div>
-      <div class="form-group"><label class="form-label">Objectif</label><input class="form-input" id="prof-goal" value="${esc(p.goal||'')}" placeholder="Prise de masse…" autocomplete="off"></div>
+      <div class="form-group"><label class="form-label">Taille (cm)</label><input class="form-input" type="number" id="prof-height" inputmode="numeric" value="${esc(p.height||'')}"></div>
+      <div class="form-group"><label class="form-label">Objectif</label><input class="form-input" id="prof-goal" value="${esc(p.goal||'')}" autocomplete="off"></div>
     </div>
-    <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin:8px 0 12px">Ajouter une mesure</div>
-    <div class="form-row-2">
-      <div class="form-group"><label class="form-label">Poids (kg)</label><input class="form-input" type="number" step="0.1" id="meas-weight" placeholder="${latest.weight||'75'}" inputmode="decimal"></div>
-      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="meas-date" value="${isoDate(Date.now())}"></div>
-    </div>
+    <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);padding:10px 0 8px">Mesures du jour</div>
+    <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="meas-date" value="${isoDate(Date.now())}"></div>
     <div class="measurements-grid">
-      <div class="form-group" style="margin:0"><label class="form-label">Poitrine (cm)</label><input class="form-input" type="number" step="0.5" id="meas-chest" placeholder="${latest.chest||'—'}" inputmode="decimal"></div>
-      <div class="form-group" style="margin:0"><label class="form-label">Taille (cm)</label><input class="form-input" type="number" step="0.5" id="meas-waist" placeholder="${latest.waist||'—'}" inputmode="decimal"></div>
-      <div class="form-group" style="margin:0"><label class="form-label">Hanches (cm)</label><input class="form-input" type="number" step="0.5" id="meas-hips" placeholder="${latest.hips||'—'}" inputmode="decimal"></div>
-      <div class="form-group" style="margin:0"><label class="form-label">Bras (cm)</label><input class="form-input" type="number" step="0.5" id="meas-arm" placeholder="${latest.arm||'—'}" inputmode="decimal"></div>
+      <div class="form-group"><label class="form-label">Poids (kg)</label><input class="form-input" type="number" step="0.1" id="meas-weight" inputmode="decimal" placeholder="${latest.weight||''}"></div>
+      <div class="form-group"><label class="form-label">Poitrine (cm)</label><input class="form-input" type="number" id="meas-chest" inputmode="numeric" placeholder="${latest.chest||''}"></div>
+      <div class="form-group"><label class="form-label">Taille (cm)</label><input class="form-input" type="number" id="meas-waist" inputmode="numeric" placeholder="${latest.waist||''}"></div>
+      <div class="form-group"><label class="form-label">Hanches (cm)</label><input class="form-input" type="number" id="meas-hips" inputmode="numeric" placeholder="${latest.hips||''}"></div>
+      <div class="form-group"><label class="form-label">Bras (cm)</label><input class="form-input" type="number" id="meas-arm" inputmode="numeric" placeholder="${latest.arm||''}"></div>
     </div>
-    ${weightChart?`<div style="margin-top:16px"><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px">Évolution du poids</div>${weightChart}</div>`:''}
-    ${buildMeasurementHistory()}
-    <div style="height:8px"></div>`;
+    ${buildBodyLogTable()}`;
   document.getElementById('sheet-footer').innerHTML=`
-    <button class="btn btn-primary" onclick="saveProfile()">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Enregistrer
-    </button>
+    <button class="btn btn-primary" onclick="saveProfile()">Enregistrer</button>
     <button class="btn btn-secondary" onclick="closeSheet()">Fermer</button>`;
 }
 
-function buildMeasurementHistory() {
-  const entries=BODY_LOG.entries.slice(0,5);
-  if(!entries.length) return '';
-  const rows=entries.map(e=>`
+function buildBodyLogTable() {
+  const entries = BODY_LOG.entries.slice(0,8);
+  if (!entries.length) return '';
+  const rows = entries.map(e=>`
     <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border-dim)">
       <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-3)">${formatDateShort(e.date)}</span>
       <span style="font-family:var(--font-mono);font-size:13px;color:var(--gold)">${e.weight?e.weight+' kg':'—'}</span>
@@ -1379,6 +1662,18 @@ function openSettingsSheet() {
       <div><div class="settings-row-label">Afficher le volume</div><div class="settings-row-sub">Dans les cartes de séance</div></div>
       <div class="toggle ${SETTINGS.get('showVolume',true)?'on':''}" onclick="toggleSetting('showVolume',this)"></div>
     </div>
+    <div class="settings-row">
+      <div><div class="settings-row-label">Son fin de repos</div><div class="settings-row-sub">Bip à la fin du timer</div></div>
+      <div class="toggle ${SETTINGS.get('timerSound',true)?'on':''}" onclick="toggleSetting('timerSound',this)"></div>
+    </div>
+    <div class="settings-row">
+      <div><div class="settings-row-label">Thème</div><div class="settings-row-sub">Couleur accent</div></div>
+      <div class="accent-picker">
+        ${[['#c9aa6f','gold'],['#4caf7d','green'],['#6f9ec9','blue'],['#9b7ec9','purple'],['#e07c52','orange']].map(([c,n])=>
+          `<div class="accent-dot${SETTINGS.get('accent','gold')===n?' active':''}" style="background:${c}" onclick="setAccent('${n}','${c}')"></div>`
+        ).join('')}
+      </div>
+    </div>
 
     <div class="settings-section-title">Données</div>
     <div class="settings-row">
@@ -1399,6 +1694,21 @@ function openSettingsSheet() {
   openSheet();
 }
 
+function setAccent(name, color) {
+  SETTINGS.set('accent', name);
+  document.documentElement.style.setProperty('--gold', color);
+  // Refresh accent dots
+  document.querySelectorAll('.accent-dot').forEach(d => d.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// Apply saved accent on boot
+function applyAccentColor() {
+  const accents = {gold:'#c9aa6f',green:'#4caf7d',blue:'#6f9ec9',purple:'#9b7ec9',orange:'#e07c52'};
+  const saved = SETTINGS.get('accent','gold');
+  if (accents[saved]) document.documentElement.style.setProperty('--gold', accents[saved]);
+}
+
 function toggleSetting(key,el) {
   const cur=SETTINGS.get(key,true);
   SETTINGS.set(key,!cur); el.classList.toggle('on',!cur);
@@ -1410,7 +1720,7 @@ function toggleSetting(key,el) {
 
 function exportData() {
   const data = {
-    version: 3,
+    version: 4,
     exportDate: new Date().toISOString(),
     sessions: DB.sessions,
     presets:  PRESETS.list,
@@ -1431,50 +1741,32 @@ function exportData() {
 // IMPORT DATA
 // ─────────────────────────────────────────────────────
 
-function triggerImport() {
-  document.getElementById('import-input').click();
-}
+function triggerImport() { document.getElementById('import-input').click(); }
 
 function handleImportFile(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
-    try {
-      const data = JSON.parse(e.target.result);
-      previewImport(data);
-    } catch(err) {
-      toast('Fichier JSON invalide','error');
-    }
-    input.value = ''; // reset so same file can be re-imported
+    try { previewImport(JSON.parse(e.target.result)); }
+    catch(err) { toast('Fichier JSON invalide','error'); }
+    input.value = '';
   };
   reader.readAsText(file);
 }
 
 function previewImport(data) {
-  // Validate structure
-  const hasV2 = data.sessions && Array.isArray(data.sessions);
-  const hasPresets = data.presets && Array.isArray(data.presets);
-  if (!hasV2) { toast('Format non reconnu','error'); return; }
-
-  const sessionCount = data.sessions.length;
-  const presetCount  = (data.presets||[]).length;
-  const bodyCount    = (data.bodyLog||[]).length;
-
+  if (!data.sessions || !Array.isArray(data.sessions)) { toast('Format non reconnu','error'); return; }
+  window._importData = data;
   document.getElementById('sheet-title').textContent = 'Importer des données';
   document.getElementById('sheet-body').innerHTML = `
     <div style="padding:8px 0 16px">
       <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-3);margin-bottom:16px;letter-spacing:1px">CONTENU DU FICHIER</div>
       <div style="display:flex;flex-direction:column;gap:10px">
+        ${[['Séances',data.sessions.length],['Presets',(data.presets||[]).length],['Mesures corporelles',(data.bodyLog||[]).length]].map(([l,v])=>`
         <div style="display:flex;justify-content:space-between;padding:12px 14px;background:var(--bg-raised);border-radius:var(--r);border:1px solid var(--border-dim)">
-          <span>Séances</span><span style="font-family:var(--font-mono);color:var(--gold)">${sessionCount}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;padding:12px 14px;background:var(--bg-raised);border-radius:var(--r);border:1px solid var(--border-dim)">
-          <span>Presets</span><span style="font-family:var(--font-mono);color:var(--gold)">${presetCount}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;padding:12px 14px;background:var(--bg-raised);border-radius:var(--r);border:1px solid var(--border-dim)">
-          <span>Mesures corporelles</span><span style="font-family:var(--font-mono);color:var(--gold)">${bodyCount}</span>
-        </div>
+          <span>${l}</span><span style="font-family:var(--font-mono);color:var(--gold)">${v}</span>
+        </div>`).join('')}
       </div>
       <div style="margin-top:16px;padding:12px 14px;background:rgba(201,170,111,.07);border:1px solid rgba(201,170,111,.2);border-radius:var(--r)">
         <div style="font-family:var(--font-mono);font-size:10px;color:var(--gold);margin-bottom:4px">MODE D'IMPORT</div>
@@ -1489,12 +1781,8 @@ function previewImport(data) {
       </div>
     </div>`;
   document.getElementById('sheet-footer').innerHTML = `
-    <button class="btn btn-primary" onclick="executeImport(${JSON.stringify(JSON.stringify(data)).slice(1,-1)})">Importer maintenant</button>
+    <button class="btn btn-primary" onclick="executeImport()">Importer maintenant</button>
     <button class="btn btn-secondary" onclick="closeSheet()">Annuler</button>`;
-
-  // Store data on window to avoid JSON injection issues
-  window._importData = data;
-  document.getElementById('sheet-footer').querySelector('.btn-primary').onclick = executeImport;
   openSheet();
 }
 
@@ -1502,42 +1790,31 @@ function executeImport() {
   const data = window._importData;
   if (!data) return;
   const mode = document.querySelector('input[name="import-mode"]:checked')?.value || 'merge';
-
-  if (mode === 'replace') {
-    ALL_KEYS.forEach(k => localStorage.removeItem(k));
-  }
+  if (mode === 'replace') ALL_KEYS.forEach(k => { localStorage.removeItem(k); _cache[k.replace('strongboy_','')] = null; });
+  // Invalidate all caches
+  Object.keys(_cache).forEach(k => _cache[k] = null);
 
   if (data.sessions) {
     if (mode === 'merge') {
       const existing = new Set(DB.sessions.map(s=>s.id));
-      const toAdd = data.sessions.filter(s=>!existing.has(s.id));
-      const merged = [...DB.sessions, ...toAdd].sort((a,b)=>b.date.localeCompare(a.date));
+      const merged = [...DB.sessions, ...data.sessions.filter(s=>!existing.has(s.id))].sort((a,b)=>b.date.localeCompare(a.date));
       DB.save(merged);
     } else { DB.save(data.sessions); }
   }
-
   if (data.presets) {
     if (mode === 'merge') {
       const existing = new Set(PRESETS.list.map(p=>p.id));
-      const toAdd = data.presets.filter(p=>!existing.has(p.id));
-      PRESETS.save([...PRESETS.list, ...toAdd]);
+      PRESETS.save([...PRESETS.list, ...data.presets.filter(p=>!existing.has(p.id))]);
     } else { PRESETS.save(data.presets); }
   }
-
-  if (data.customExercises) {
-    data.customExercises.forEach(e => CUSTOM_EX.add(e));
-  }
-
-  if (data.profile && mode==='replace') { PROFILE.save(data.profile); }
-
+  if (data.customExercises) data.customExercises.forEach(e => CUSTOM_EX.add(e));
+  if (data.profile && mode==='replace') PROFILE.save(data.profile);
   if (data.bodyLog) {
     if (mode === 'merge') {
       const existing = new Set(BODY_LOG.entries.map(e=>e.date));
-      const toAdd = data.bodyLog.filter(e=>!existing.has(e.date));
-      BODY_LOG.save([...BODY_LOG.entries, ...toAdd].sort((a,b)=>b.date.localeCompare(a.date)));
+      BODY_LOG.save([...BODY_LOG.entries, ...data.bodyLog.filter(e=>!existing.has(e.date))].sort((a,b)=>b.date.localeCompare(a.date)));
     } else { BODY_LOG.save(data.bodyLog); }
   }
-
   toast(`Import réussi — ${data.sessions?.length||0} séances ✓`);
   window._importData = null;
   closeSheet();
@@ -1558,6 +1835,7 @@ function confirmResetData() {
 
 function resetAllData() {
   ALL_KEYS.forEach(k=>localStorage.removeItem(k));
+  Object.keys(_cache).forEach(k=>_cache[k]=null);
   closeSheet(); toast('Données réinitialisées','error');
   setTimeout(()=>location.reload(), 800);
 }
@@ -1638,9 +1916,38 @@ function emptyState(icon,title,sub){
 }
 
 // ─────────────────────────────────────────────────────
+// SEED DATA
+// ─────────────────────────────────────────────────────
+
+function seedData() {
+  if (DB.sessions.length > 0) return;
+  const today = isoDate(Date.now());
+  const yesterday = isoDate(Date.now() - 86400000);
+  const twoDaysAgo = isoDate(Date.now() - 2*86400000);
+  DB.save([
+    { id: uid(), name: 'Push A', date: today, note: 'Super séance !', duration: 65, feeling: 5, exercises: [
+      { id: uid(), name: 'Développé couché barre', sets: [{w:100,r:5,n:''},{w:100,r:5,n:''},{w:95,r:6,n:''}] },
+      { id: uid(), name: 'Développé incliné haltères', sets: [{w:40,r:10,n:''},{w:40,r:9,n:''},{w:37.5,r:10,n:''}] },
+      { id: uid(), name: 'Dips pectoraux', sets: [{w:20,r:12,n:''},{w:20,r:11,n:''},{w:15,r:12,n:''}] },
+    ]},
+    { id: uid(), name: 'Pull A', date: yesterday, note: '', duration: 70, feeling: 4, exercises: [
+      { id: uid(), name: 'Tractions lestées', sets: [{w:20,r:6,n:''},{w:20,r:5,n:''},{w:15,r:7,n:''}] },
+      { id: uid(), name: 'Rowing barre', sets: [{w:80,r:8,n:''},{w:80,r:8,n:''},{w:75,r:9,n:''}] },
+      { id: uid(), name: 'Curl barre EZ', sets: [{w:45,r:10,n:''},{w:45,r:9,n:''},{w:40,r:10,n:''}] },
+    ]},
+    { id: uid(), name: 'Legs A', date: twoDaysAgo, note: 'Douleurs quadriceps', duration: 75, feeling: 3, exercises: [
+      { id: uid(), name: 'Squat barre', sets: [{w:120,r:5,n:''},{w:120,r:5,n:''},{w:115,r:6,n:''}] },
+      { id: uid(), name: 'Leg extension', sets: [{w:70,r:12,n:''},{w:70,r:11,n:''},{w:65,r:12,n:''}] },
+      { id: uid(), name: 'Hip thrust barre', sets: [{w:100,r:12,n:''},{w:100,r:12,n:''},{w:100,r:10,n:''}] },
+    ]},
+  ]);
+}
+
+// ─────────────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────────────
 
 seedData();
+applyAccentColor();
 renderDashboard();
 updateDrawerProfile();

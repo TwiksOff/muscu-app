@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#080809">
   <title>STRONG BOY</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
 </head>
@@ -34,6 +34,7 @@
           <div class="greeting-date" id="greeting-date">…</div>
         </div>
         <div id="streak-banner"></div>
+        <div id="suggestion-block"></div>
         <div class="stats-scroll" id="stats-row"></div>
         <div class="section-header">
           <span class="section-title">Récentes</span>
@@ -250,6 +251,6 @@
   <!-- Hidden file input for data import -->
   <input type="file" id="import-input" accept=".json" style="display:none" onchange="handleImportFile(this)">
 
-  <script src="app.js"></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
