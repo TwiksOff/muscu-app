@@ -255,8 +255,8 @@ function renderDashboard() {
       <div class="streak-banner">
         <div class="streak-flame">🔥</div>
         <div class="streak-info">
-          <div class="streak-count">${streak} jour${streak>1?'s':''}</div>
-          <div class="streak-label">Série d'entraînement</div>
+          <div class="streak-count">${streak} séance${streak>1?'s':''}</div>
+          <div class="streak-label">Série active · 1 repos toléré</div>
         </div>
         <div class="streak-next">${nextMsg}</div>
       </div>`;
@@ -322,13 +322,29 @@ function computeStreak(sessions) {
   if (!sessions.length) return 0;
   const dates = new Set(sessions.map(s => s.date));
   const today = isoDate(Date.now());
-  let streak = 0, cur = new Date();
-  while (true) {
+  // Allow 1 rest day between sessions (streak breaks only on 2+ consecutive rest days)
+  let streak = 0;
+  let cur = new Date();
+  cur.setHours(0,0,0,0);
+  let restDays = 0;
+  let foundFirst = false;
+
+  for (let i = 0; i <= 365; i++) {
     const d = isoDate(cur.getTime());
-    if (dates.has(d)) { streak++; cur.setDate(cur.getDate()-1); }
-    else if (d === today) { cur.setDate(cur.getDate()-1); }
-    else break;
-    if (streak > 365) break;
+    if (dates.has(d)) {
+      if (!foundFirst && d === today) foundFirst = true;
+      if (foundFirst || streak > 0) { streak++; restDays = 0; }
+      if (d !== today) foundFirst = true;
+    } else {
+      if (i === 0) {
+        // today is a rest day — allowed, start counting from yesterday
+      } else {
+        restDays++;
+        if (restDays >= 2) break; // 2 consecutive rest days = streak broken
+      }
+    }
+    cur.setDate(cur.getDate() - 1);
+    if (i === 0 && !dates.has(today)) continue; // skip today if no session
   }
   return streak;
 }
@@ -586,23 +602,33 @@ function generateShareCanvas(s) {
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
+  // Transparent background (no fill = fully transparent PNG)
+  ctx.clearRect(0, 0, W, H);
+
+  // Semi-transparent frosted dark layer (like Strava)
   const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#0d0d0f');
-  bg.addColorStop(0.5, '#131315');
-  bg.addColorStop(1, '#0a0a0b');
+  bg.addColorStop(0, 'rgba(8,8,10,0.82)');
+  bg.addColorStop(0.5, 'rgba(16,16,19,0.78)');
+  bg.addColorStop(1, 'rgba(8,8,10,0.85)');
   ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
+  // Rounded rect for the card
+  ctx.beginPath();
+  roundRect(ctx, 0, 0, W, H, 40);
+  ctx.fill();
 
-  // Grain
-  ctx.fillStyle = 'rgba(255,255,255,0.015)';
-  for (let i=0; i<8000; i++) ctx.fillRect(Math.random()*W, Math.random()*H, 1, 1);
+  // Subtle grain texture
+  ctx.fillStyle = 'rgba(255,255,255,0.012)';
+  for (let i=0; i<6000; i++) ctx.fillRect(Math.random()*W, Math.random()*H, 1, 1);
 
-  const goldGrad = ctx.createLinearGradient(0, 0, W, 0);
-  goldGrad.addColorStop(0, '#c9aa6f');
-  goldGrad.addColorStop(0.6, '#c9aa6f');
-  goldGrad.addColorStop(1, 'rgba(201,170,111,0)');
-  ctx.fillStyle = goldGrad;
-  ctx.fillRect(0, 0, W, 6);
+  // Gold top accent bar (gradient fade)
+  const goldBar = ctx.createLinearGradient(0, 0, W, 0);
+  goldBar.addColorStop(0, '#c9aa6f');
+  goldBar.addColorStop(0.7, '#c9aa6f');
+  goldBar.addColorStop(1, 'rgba(201,170,111,0)');
+  ctx.fillStyle = goldBar;
+  ctx.beginPath();
+  roundRect(ctx, 0, 0, W, 6, 4);
+  ctx.fill();
 
   ctx.fillStyle = '#ededef';
   ctx.font = 'bold 48px "DM Mono", monospace';
@@ -785,7 +811,9 @@ function openNewSessionModal(presetId) {
     }
   }
   document.getElementById('sheet-title').textContent = presetId ? 'Depuis preset' : 'Nouvelle séance';
-  renderSessionForm(null);
+  // Pre-fill name from preset
+  const _presetName = presetId ? (PRESETS.find(presetId)?.name || '') : '';
+  renderSessionForm(null, _presetName);
   openSheet();
 }
 
@@ -798,12 +826,13 @@ function openEditSession(id) {
   openSheet();
 }
 
-function renderSessionForm(s) {
+function renderSessionForm(s, prefillName='') {
   const today = isoDate(Date.now());
+  const nameVal = s ? esc(s.name) : esc(prefillName);
   document.getElementById('sheet-body').innerHTML = `
     <div class="form-group">
       <label class="form-label">Nom de la séance</label>
-      <input class="form-input" id="f-name" placeholder="Push A, Legs, Full Body…" value="${s?esc(s.name):''}" autocomplete="off">
+      <input class="form-input" id="f-name" placeholder="Push A, Legs, Full Body…" value="${nameVal}" autocomplete="off">
     </div>
     <div class="form-row-2">
       <div class="form-group">
@@ -864,12 +893,19 @@ function renderFormExercises() {
   _exercises.forEach((ex, ei) => {
     const lastData = ex.name ? getLastSetsForExercise(ex.name, _editId) : null;
     let prevHint = '';
-    if (lastData && ex.name) {
-      const maxW = Math.max(...lastData.sets.map(s=>s.w));
-      prevHint = `<div class="prev-hint">
-        <span>↑ Dernière fois (${formatDateShort(lastData.date)}) : ${maxW}kg × ${lastData.sets[0].r} reps</span>
-        <button class="timer-start-btn" onclick="startTimer(${SETTINGS.get('defaultRest',90)})">⏱ Repos</button>
-      </div>`;
+    if (ex.name) {
+      if (lastData) {
+        const maxW = Math.max(...lastData.sets.map(s=>s.w));
+        prevHint = `<div class="prev-hint">
+          <span>↑ Dernière fois (${formatDateShort(lastData.date)}) : ${maxW}kg × ${lastData.sets[0].r} reps</span>
+          <button class="timer-start-btn" onclick="startTimer(${SETTINGS.get('defaultRest',90)})">⏱ Repos</button>
+        </div>`;
+      } else {
+        prevHint = `<div class="prev-hint">
+          <span style="color:var(--text-3)">Premier enregistrement</span>
+          <button class="timer-start-btn" onclick="startTimer(${SETTINGS.get('defaultRest',90)})">⏱ Repos</button>
+        </div>`;
+      }
     }
 
     const setsRows = ex.sets.map((set, si) => {
@@ -1303,39 +1339,69 @@ function renderProgress() {
   const volData = buildVolumeData(sessions);
   const feelingData = buildFeelingData(sessions);
 
+  // Track open sections (persist in window)
+  if (!window._statsOpen) window._statsOpen = { activite: true, muscles: false, exercice: false, records: false, calendrier: false };
+
   el.innerHTML = `
-    <div class="section-header"><span class="section-title">Séances / semaine</span></div>
-    <div class="progress-section"><div class="chart-card">${buildBarChart(weeklyData)}</div></div>
+    ${statsSection('activite','📊 Activité', `
+      <div class="progress-section"><div class="chart-card"><div class="chart-card-title">Séances / semaine</div>${buildBarChart(weeklyData)}</div></div>
+      <div class="progress-section"><div class="chart-card"><div class="chart-card-title">Volume total / semaine (kg)</div>${buildLineChart(volData)}</div></div>
+      ${feelingData.length>=2 ? `<div class="progress-section"><div class="chart-card"><div class="chart-card-title">Ressenti (RPE moyen)</div>${buildLineChart(feelingData)}</div></div>` : ''}
+    `)}
 
-    <div class="section-header"><span class="section-title">Volume total / semaine (kg)</span></div>
-    <div class="progress-section"><div class="chart-card">${buildLineChart(volData)}</div></div>
+    ${statsSection('muscles','💪 Muscles', `
+      <div class="stats-period-tabs">
+        <button class="stats-period-btn ${(window._musclePeriod||7)===7?'active':''}" onclick="window._musclePeriod=7;renderProgress()">7 jours</button>
+        <button class="stats-period-btn ${(window._musclePeriod||7)===30?'active':''}" onclick="window._musclePeriod=30;renderProgress()">30 jours</button>
+      </div>
+      <div class="progress-section"><div class="muscle-grid">${buildMuscleRows(muscleData, window._musclePeriod||7)}</div></div>
+    `)}
 
-    ${feelingData.length>=2 ? `
-    <div class="section-header"><span class="section-title">Ressenti (RPE moyen)</span></div>
-    <div class="progress-section"><div class="chart-card">${buildLineChart(feelingData)}</div></div>` : ''}
+    ${statsSection('exercice','🏋️ Progression par exercice', `
+      <div class="ex-selector-scroll">${exNames.slice(0,15).map(n=>`<button class="ex-sel-btn ${n===selected?'active':''}" data-action="select-pex" data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>
+      ${exData.length < 2
+        ? `<div class="progress-section"><div style="color:var(--text-3);font-family:var(--font-mono);font-size:11px;padding:10px 0">Données insuffisantes.</div></div>`
+        : `<div class="progress-section">
+            <div class="chart-card" style="margin-bottom:10px"><div class="chart-card-title">Charge max (kg)</div>${buildLineChart(exData.map(d=>({x:d.date,y:d.maxW})))}</div>
+            <div class="chart-card"><div class="chart-card-title">Volume total (kg)</div>${buildLineChart(exData.map(d=>({x:d.date,y:d.vol})))}</div>
+          </div>`}
+    `)}
 
-    <div class="section-header"><span class="section-title">Muscles — 7 jours</span></div>
-    <div class="progress-section"><div class="muscle-grid">${buildMuscleRows(muscleData,7)}</div></div>
+    ${statsSection('records','🏆 Records personnels', `
+      <div class="progress-section">${buildPRListHTML(sessions)}</div>
+    `)}
 
-    <div class="section-header" style="margin-top:4px"><span class="section-title">Muscles — 30 jours</span></div>
-    <div class="progress-section"><div class="muscle-grid">${buildMuscleRows(muscleData,30)}</div></div>
-
-    <div class="section-header"><span class="section-title">Progression par exercice</span></div>
-    <div class="ex-selector-scroll">${exNames.slice(0,15).map(n=>`<button class="ex-sel-btn ${n===selected?'active':''}" data-action="select-pex" data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>
-    ${exData.length < 2
-      ? `<div class="progress-section"><div style="color:var(--text-3);font-family:var(--font-mono);font-size:11px;padding:10px 0">Données insuffisantes.</div></div>`
-      : `<div class="progress-section">
-          <div class="chart-card" style="margin-bottom:10px"><div class="chart-card-title">Charge max (kg)</div>${buildLineChart(exData.map(d=>({x:d.date,y:d.maxW})))}</div>
-          <div class="chart-card"><div class="chart-card-title">Volume total (kg)</div>${buildLineChart(exData.map(d=>({x:d.date,y:d.vol})))}</div>
-        </div>`}
-
-    <div class="section-header"><span class="section-title">Records personnels</span></div>
-    <div class="progress-section">${buildPRListHTML(sessions)}</div>
-
-    <div class="section-header"><span class="section-title">Calendrier d'activité</span></div>
-    <div class="progress-section">${buildActivityCalendar(sessions)}</div>
+    ${statsSection('calendrier','📅 Calendrier d\'activité', `
+      <div class="progress-section">${buildActivityCalendar(sessions)}</div>
+    `)}
 
     <div style="height:20px"></div>`;
+}
+
+function statsSection(key, title, content) {
+  const isOpen = window._statsOpen?.[key] !== false;
+  return `
+    <div class="stats-accordion">
+      <button class="stats-accordion-btn ${isOpen?'open':''}" onclick="toggleStatsSection('${key}')">
+        <span class="stats-accordion-title">${title}</span>
+        <svg class="stats-accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="stats-accordion-body ${isOpen?'open':''}">${content}</div>
+    </div>`;
+}
+
+function toggleStatsSection(key) {
+  if (!window._statsOpen) window._statsOpen = {};
+  window._statsOpen[key] = !window._statsOpen[key];
+  // Toggle DOM directly without full re-render
+  const btns = document.querySelectorAll('.stats-accordion-btn');
+  btns.forEach(btn => {
+    if (btn.getAttribute('onclick')?.includes(`'${key}'`)) {
+      btn.classList.toggle('open', window._statsOpen[key]);
+      const body = btn.nextElementSibling;
+      if (body) body.classList.toggle('open', window._statsOpen[key]);
+    }
+  });
 }
 
 // NEW: full 12-week activity calendar

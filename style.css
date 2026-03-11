@@ -265,12 +265,13 @@ body::after {
 .pr-date { font-family:var(--font-mono); font-size:10px; color:var(--text-3); }
 
 /* ── ACTIVITY CALENDAR (new) ── */
-.activity-calendar { display:flex; gap:4px; overflow-x:auto; }
+.activity-calendar { display:flex; gap:4px; overflow-x:auto; justify-content:center; padding:4px 0; }
 .activity-calendar::-webkit-scrollbar { display:none; }
-.ac-day-labels { display:flex; flex-direction:column; gap:4px; padding-top:2px; }
+.ac-day-labels { display:flex; flex-direction:column; gap:4px; padding-top:2px; flex-shrink:0; }
 .ac-label { width:12px; height:12px; font-family:var(--font-mono); font-size:8px; color:var(--text-3); display:flex; align-items:center; justify-content:center; }
-.ac-grid { display:flex; gap:4px; }
-.ac-col { display:flex; flex-direction:column; gap:4px; }
+.ac-grid { display:flex; gap:4px; overflow-x:auto; }
+.ac-grid::-webkit-scrollbar { display:none; }
+.ac-col { display:flex; flex-direction:column; gap:4px; flex-shrink:0; }
 .ac-cell { width:12px; height:12px; background:var(--bg-raised); border-radius:2px; }
 .ac-cell.active { background:rgba(201,170,111,.35); }
 .ac-cell.today { outline:1px solid var(--gold); }
@@ -462,3 +463,27 @@ body::after {
 .share-preview-wrap { text-align:center; padding:8px 0; }
 .share-preview-wrap img { width:100%; border-radius:var(--r-lg); border:1px solid var(--border-mid); display:block; }
 .share-preview-hint { font-family:var(--font-mono); font-size:10px; color:var(--text-3); margin-top:10px; letter-spacing:.5px; }
+
+/* ── STATS ACCORDION ── */
+.stats-accordion { border-bottom:1px solid var(--border-dim); }
+.stats-accordion-btn {
+  width:100%; display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; background:none; border:none; cursor:pointer;
+  color:var(--text-1); text-align:left; gap:8px;
+  -webkit-tap-highlight-color:transparent;
+}
+.stats-accordion-btn:active { background:var(--bg-raised); }
+.stats-accordion-title { font-family:var(--font-mono); font-size:13px; font-weight:500; letter-spacing:.3px; }
+.stats-accordion-chevron { flex-shrink:0; color:var(--text-3); transition:transform var(--ease); }
+.stats-accordion-btn.open .stats-accordion-chevron { transform:rotate(180deg); }
+.stats-accordion-body { display:none; padding:0 0 8px; }
+.stats-accordion-body.open { display:block; }
+
+/* ── STATS PERIOD TABS ── */
+.stats-period-tabs { display:flex; gap:6px; padding:8px 16px 4px; }
+.stats-period-btn {
+  padding:6px 14px; border-radius:20px; border:1px solid var(--border-mid);
+  background:var(--bg-raised); color:var(--text-2); font-family:var(--font-mono);
+  font-size:11px; cursor:pointer; transition:all var(--ease);
+}
+.stats-period-btn.active { background:var(--gold-dim); border-color:var(--gold); color:var(--gold); }
