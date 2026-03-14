@@ -216,8 +216,7 @@ function renderDashboard() {
   const now = new Date();
   const h = now.getHours();
   const profileName = PROFILE.get('name','');
-  document.getElementById('greeting-label').textContent =
-    (h < 12 ? 'Bonjour' : h < 18 ? 'Bonne après-midi' : 'Bonsoir') + (profileName ? ` ${profileName.split(' ')[0]}` : '');
+  document.getElementById('greeting-label').textContent = 'Bonjour' + (profileName ? ` ${profileName.split(' ')[0]}` : '');
   document.getElementById('greeting-date').textContent =
     now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}).toUpperCase();
 
