@@ -421,7 +421,29 @@ body::after {
 .accent-dot.active { border-color:white; transform:scale(1.1); }
 .accent-dot:active { transform:scale(0.92); }
 
-/* ── BOTTOM NAV — no backdrop-filter ── */
+/* ── EXERCISE MULTI-MUSCLE BADGES (detail view) ── */
+.ex-muscle-badges { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+.ex-muscle-badge { font-family:var(--font-mono); font-size:8px; letter-spacing:.8px; text-transform:uppercase; padding:2px 7px; border-radius:10px; background:rgba(255,255,255,0.06); color:var(--text-3); border:1px solid var(--border-dim); }
+.ex-muscle-badge.primary { background:var(--gold-dim); color:var(--gold); border-color:rgba(201,170,111,.25); }
+
+/* ── PICKER: multiple muscle tags ── */
+.picker-item-muscles { display:flex; flex-direction:column; align-items:flex-end; gap:3px; flex-shrink:0; }
+.picker-item-muscles .picker-item-muscle { font-size:8px; padding:2px 8px; }
+.picker-item-muscles .picker-item-muscle:first-child { background:var(--gold-dim); color:var(--gold); }
+
+/* ── MUSCLE TAG GRID (create exercise) ── */
+.muscle-tag-grid { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+.muscle-tag-btn { font-family:var(--font-mono); font-size:11px; padding:8px 14px; border-radius:20px; background:var(--bg-raised); border:1px solid var(--border-mid); color:var(--text-2); cursor:pointer; transition:var(--ease); }
+.muscle-tag-btn:active { transform:scale(0.94); }
+.muscle-tag-btn.active { background:var(--gold-dim); border-color:var(--gold); color:var(--gold); }
+
+/* ── EX PR STRIP (stats) ── */
+.ex-pr-strip { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+.ex-pr-item { flex:1; min-width:80px; background:var(--bg-raised); border:1px solid var(--border-dim); border-radius:var(--r); padding:10px 12px; display:flex; flex-direction:column; gap:3px; }
+.ex-pr-label { font-family:var(--font-mono); font-size:8px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-3); }
+.ex-pr-val { font-family:var(--font-display); font-size:22px; color:var(--gold); line-height:1; }
+
+
 .bottom-nav { position:fixed; bottom:0;left:0;right:0; height:calc(var(--nav-h) + var(--bottom-safe)); padding-bottom:var(--bottom-safe); background:var(--bg-deep); border-top:1px solid var(--border-dim); display:grid; grid-template-columns:repeat(5,1fr); align-items:center; z-index:100; }
 .home-indicator-spacer { height:var(--bottom-safe); }
 .nav-item { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; height:var(--nav-h); background:none; border:none; color:var(--text-3); cursor:pointer; transition:var(--ease); padding:0; }
