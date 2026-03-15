@@ -100,6 +100,8 @@ const EX_TO_MUSCLES = {
 
 function getMusclesForExercise(name) {
   if (!name || typeof name !== 'string') return ['Autre'];
+  // Check user overrides first (set from exercise library editor)
+  if (window._muscleOverrides && window._muscleOverrides[name]) return window._muscleOverrides[name];
   if (EX_TO_MUSCLES[name]) return EX_TO_MUSCLES[name];
   const customData = CUSTOM_EX.getByName(name);
   if (customData && customData.muscles && customData.muscles.length) return customData.muscles;
@@ -1507,79 +1509,235 @@ function confirmDeletePreset(id) {
 function deletePreset(id){ PRESETS.remove(id); toast('Preset supprimé','error'); closeSheet(); renderPresets(); }
 
 // ─────────────────────────────────────────────────────
-// PROGRESS / STATS
+// PROGRESS / STATS  — v2 redesign
 // ─────────────────────────────────────────────────────
 
 function renderProgress() {
   const sessions = DB.sessions;
   const el = document.getElementById('progress-content');
-  if (!sessions.length) { el.innerHTML = emptyState('📈','Pas encore de données','Enregistrez votre première séance\npour voir vos statistiques'); return; }
+  if (!sessions.length) {
+    el.innerHTML = emptyState('', 'Pas encore de données', 'Enregistrez votre première séance\npour voir vos statistiques');
+    return;
+  }
 
-  const weeklyData = buildWeeklyData(sessions);
-  const muscleData = buildMuscleData(sessions);
-  const exNames = [...new Set(sessions.flatMap(s=>s.exercises.map(e=>e.name)))];
+  const exNames = [...new Set(sessions.flatMap(s => s.exercises.map(e => e.name)))];
   const selected = window._pEx || exNames[0] || '';
-  const exData = buildExData(sessions, selected);
+  const exData   = buildExData(sessions, selected);
+  const muscleData = buildMuscleData(sessions);
 
-  // Volume over time (monthly)
-  const volData = buildVolumeData(sessions);
-  const feelingData = buildFeelingData(sessions);
+  // Persist tab state
+  if (!window._statsTab) window._statsTab = 'activite';
 
-  // Track open sections (persist in window)
-  if (!window._statsOpen) window._statsOpen = { activite: true, muscles: false, exercice: false, records: false, calendrier: false };
+  const tabs = [
+    { key:'activite',  label:'Activité'    },
+    { key:'muscles',   label:'Muscles'     },
+    { key:'exercice',  label:'Progression' },
+    { key:'records',   label:'Records'     },
+  ];
 
-  el.innerHTML = `
-    ${statsSection('activite','📊 Activité', `
-      <div class="progress-section"><div class="chart-card"><div class="chart-card-title">Séances / semaine</div>${buildBarChart(weeklyData)}</div></div>
-      <div class="progress-section"><div class="chart-card"><div class="chart-card-title">Volume total / semaine (kg)</div>${buildLineChart(volData)}</div></div>
-      ${feelingData.length>=2 ? `<div class="progress-section"><div class="chart-card"><div class="chart-card-title">Ressenti (RPE moyen)</div>${buildLineChart(feelingData)}</div></div>` : ''}
-    `)}
+  const tabBar = `<div class="stats-tab-bar">${
+    tabs.map(t => `<button class="stats-tab-btn${window._statsTab===t.key?' active':''}" onclick="window._statsTab='${t.key}';renderProgress()">${t.label}</button>`).join('')
+  }</div>`;
 
-    ${statsSection('muscles','💪 Muscles', `
-      <div class="stats-period-tabs">
-        <button class="stats-period-btn ${(window._musclePeriod||7)===7?'active':''}" onclick="window._musclePeriod=7;renderProgress()">7 jours</button>
-        <button class="stats-period-btn ${(window._musclePeriod||7)===30?'active':''}" onclick="window._musclePeriod=30;renderProgress()">30 jours</button>
+  let body = '';
+  switch (window._statsTab) {
+    case 'activite': body = buildTabActivite(sessions); break;
+    case 'muscles':  body = buildTabMuscles(muscleData); break;
+    case 'exercice': body = buildTabExercice(exNames, selected, exData); break;
+    case 'records':  body = buildTabRecords(sessions); break;
+  }
+
+  el.innerHTML = tabBar + `<div class="stats-tab-body">${body}</div><div style="height:20px"></div>`;
+}
+
+// ── TAB: ACTIVITE ─────────────────────────────────────
+function buildTabActivite(sessions) {
+  const now = new Date(); now.setHours(0,0,0,0);
+  const weekStart = getWeekStart(now);
+  const thisWeek  = sessions.filter(s => parseLocalDate(s.date) >= weekStart);
+  const totalVol  = Math.round(sessions.reduce((a,s) => a+sessionVolume(s),0));
+  const totalReps = sessions.reduce((a,s) => a+s.exercises.reduce((b,e) => b+e.sets.reduce((c,x)=>c+x.r,0),0),0);
+  const avgDur    = computeAvgDuration(sessions);
+  const streak    = computeStreak(sessions);
+
+  // KPI grid
+  const kpis = [
+    { label:'Séances totales',   value: sessions.length,       unit:'' },
+    { label:'Cette semaine',     value: thisWeek.length,       unit:'' },
+    { label:'Volume soulevé',    value: fmtNum(totalVol),      unit:'kg' },
+    { label:'Reps totales',      value: fmtNum(totalReps),     unit:'' },
+    { label:'Série active',      value: streak,                unit:'j' },
+    ...(avgDur ? [{ label:'Durée moyenne', value: avgDur, unit:'min' }] : []),
+  ];
+  const kpiHTML = `<div class="stats-kpi-grid">${
+    kpis.map(k => `<div class="stats-kpi"><div class="stats-kpi-val">${k.value}<span class="stats-kpi-unit">${k.unit}</span></div><div class="stats-kpi-label">${k.label}</div></div>`).join('')
+  }</div>`;
+
+  // Weekly bar chart
+  const weeklyData = buildWeeklyData(sessions);
+  const volData    = buildVolumeData(sessions);
+
+  // Feeling / RPE sparkline
+  const feelData = buildFeelingData(sessions);
+
+  return `
+    ${kpiHTML}
+    <div class="stats-chart-section">
+      <div class="stats-chart-label">Séances par semaine</div>
+      <div class="chart-card">${buildBarChart(weeklyData)}</div>
+    </div>
+    <div class="stats-chart-section">
+      <div class="stats-chart-label">Volume soulevé / semaine (kg)</div>
+      <div class="chart-card">${buildLineChart(volData)}</div>
+    </div>
+    ${feelData.length >= 2 ? `
+    <div class="stats-chart-section">
+      <div class="stats-chart-label">Ressenti (RPE moyen par séance)</div>
+      <div class="chart-card">${buildLineChart(feelData)}</div>
+    </div>` : ''}
+    <div class="stats-chart-section">
+      <div class="stats-chart-label">Calendrier d'activité — 12 semaines</div>
+      <div class="chart-card">${buildActivityCalendar(sessions)}</div>
+    </div>`;
+}
+
+// ── TAB: MUSCLES ──────────────────────────────────────
+function buildTabMuscles(muscleData) {
+  const period = window._musclePeriod || 7;
+  const periodBtns = `<div class="stats-period-tabs">
+    <button class="stats-period-btn${period===7?' active':''}" onclick="window._musclePeriod=7;renderProgress()">7 jours</button>
+    <button class="stats-period-btn${period===30?' active':''}" onclick="window._musclePeriod=30;renderProgress()">30 jours</button>
+  </div>`;
+  return periodBtns + `<div class="muscle-grid">${buildMuscleRows(muscleData, period)}</div>`;
+}
+
+// ── TAB: EXERCICE ─────────────────────────────────────
+function buildTabExercice(exNames, selected, exData) {
+  const selectorHTML = `<div class="ex-selector-scroll">${
+    exNames.slice(0,20).map(n =>
+      `<button class="ex-sel-btn${n===selected?' active':''}" data-action="select-pex" data-name="${esc(n)}">${esc(n)}</button>`
+    ).join('')
+  }</div>`;
+
+  if (exData.length < 2) {
+    return selectorHTML + `<div class="stats-empty-hint">Besoin d'au moins 2 enregistrements pour tracer une courbe.</div>`;
+  }
+
+  const prW   = Math.max(...exData.map(d=>d.maxW));
+  const prR   = Math.max(...exData.map(d=>d.maxR));
+  const prVol = Math.max(...exData.map(d=>d.vol));
+
+  const prStrip = `<div class="ex-pr-strip">
+    <div class="ex-pr-item"><div class="ex-pr-label">Record poids</div><div class="ex-pr-val">${prW} <span class="ex-pr-unit">kg</span></div></div>
+    <div class="ex-pr-item"><div class="ex-pr-label">Record reps</div><div class="ex-pr-val">${prR} <span class="ex-pr-unit">reps</span></div></div>
+    <div class="ex-pr-item"><div class="ex-pr-label">Volume max</div><div class="ex-pr-val">${prVol} <span class="ex-pr-unit">kg</span></div></div>
+  </div>`;
+
+  // Dual-axis chart: weight (gold) + reps (blue) on same SVG
+  const dualChart = `<div class="stats-chart-section">
+    <div class="stats-chart-label">Poids max (kg) &amp; Répétitions max</div>
+    <div class="chart-card">
+      ${buildDualLineChart(
+        exData.map(d=>({x:d.date, y:d.maxW})),
+        exData.map(d=>({x:d.date, y:d.maxR}))
+      )}
+      <div class="dual-chart-legend">
+        <span class="dcl-item dcl-gold">Poids (kg)</span>
+        <span class="dcl-item dcl-blue">Reps</span>
       </div>
-      <div class="progress-section"><div class="muscle-grid">${buildMuscleRows(muscleData, window._musclePeriod||7)}</div></div>
-    `)}
+    </div>
+  </div>`;
 
-    ${statsSection('exercice','🏋️ Progression par exercice', `
-      <div class="ex-selector-scroll">${exNames.slice(0,15).map(n=>`<button class="ex-sel-btn ${n===selected?'active':''}" data-action="select-pex" data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>
-      ${exData.length < 2
-        ? `<div class="progress-section"><div style="color:var(--text-3);font-family:var(--font-mono);font-size:11px;padding:10px 0">Données insuffisantes.</div></div>`
-        : `<div class="progress-section">
-            <div class="chart-tabs" style="display:flex;gap:6px;margin-bottom:10px">
-              <button class="stats-period-btn ${(window._exChartTab||'weight')==='weight'?'active':''}" onclick="window._exChartTab='weight';renderProgress()">⚖️ Poids</button>
-              <button class="stats-period-btn ${(window._exChartTab||'weight')==='reps'?'active':''}" onclick="window._exChartTab='reps';renderProgress()">🔁 Reps</button>
-              <button class="stats-period-btn ${(window._exChartTab||'weight')==='vol'?'active':''}" onclick="window._exChartTab='vol';renderProgress()">📦 Volume</button>
-            </div>
-            ${(window._exChartTab||'weight')==='weight'
-              ? `<div class="chart-card"><div class="chart-card-title">Charge max (kg)</div>${buildLineChart(exData.map(d=>({x:d.date,y:d.maxW})))}</div>`
-              : (window._exChartTab==='reps'
-                ? `<div class="chart-card"><div class="chart-card-title">Répétitions max (reps)</div>${buildLineChart(exData.map(d=>({x:d.date,y:d.maxR})))}</div>
-                   <div class="chart-card" style="margin-top:10px"><div class="chart-card-title">Total répétitions / séance</div>${buildLineChart(exData.map(d=>({x:d.date,y:d.totalReps})))}</div>`
-                : `<div class="chart-card"><div class="chart-card-title">Volume total (kg)</div>${buildLineChart(exData.map(d=>({x:d.date,y:d.vol})))}</div>`)
-            }
-            <div class="ex-pr-strip">
-              <div class="ex-pr-item"><span class="ex-pr-label">PR Poids</span><span class="ex-pr-val">${Math.max(...exData.map(d=>d.maxW))} kg</span></div>
-              <div class="ex-pr-item"><span class="ex-pr-label">PR Reps</span><span class="ex-pr-val">${Math.max(...exData.map(d=>d.maxR))} reps</span></div>
-              <div class="ex-pr-item"><span class="ex-pr-label">Vol. max</span><span class="ex-pr-val">${Math.max(...exData.map(d=>d.vol))} kg</span></div>
-            </div>
-          </div>`}
-    `)}
+  const volChart = `<div class="stats-chart-section">
+    <div class="stats-chart-label">Volume total (kg × reps)</div>
+    <div class="chart-card">${buildLineChart(exData.map(d=>({x:d.date,y:d.vol})))}</div>
+  </div>`;
 
-    ${statsSection('records','🏆 Records personnels', `
-      <div class="progress-section">${buildPRListHTML(sessions)}</div>
-    `)}
+  return selectorHTML + prStrip + dualChart + volChart;
+}
 
-    ${statsSection('calendrier','📅 Calendrier d\'activité', `
-      <div class="progress-section">${buildActivityCalendar(sessions)}</div>
-    `)}
+// ── TAB: RECORDS ─────────────────────────────────────
+function buildTabRecords(sessions) {
+  const prs = buildPRMap(sessions);
+  const tab = window._prTab || 'weight';
 
-    <div style="height:20px"></div>`;
+  const tabBtns = `<div class="stats-period-tabs">
+    <button class="stats-period-btn${tab==='weight'?' active':''}" onclick="window._prTab='weight';renderProgress()">Par poids</button>
+    <button class="stats-period-btn${tab==='reps'?' active':''}" onclick="window._prTab='reps';renderProgress()">Par reps</button>
+  </div>`;
+
+  const items = Object.entries(prs)
+    .sort((a,b) => tab==='weight' ? b[1].w-a[1].w : b[1].r-a[1].r)
+    .map(([name,pr], i) => {
+      const medal = i===0?'medal-gold':i===1?'medal-silver':i===2?'medal-bronze':'';
+      return `<div class="pr-item">
+        ${medal ? `<div class="pr-medal ${medal}"></div>` : '<div class="pr-medal-empty"></div>'}
+        <div class="pr-name">${esc(name)}</div>
+        <div class="pr-right">
+          ${tab==='weight'
+            ? `<div class="pr-weight">${pr.w}<span class="pr-unit"> kg</span></div><div class="pr-date">${formatDateShort(pr.wDate)}</div>`
+            : `<div class="pr-weight">${pr.r}<span class="pr-unit"> reps</span></div><div class="pr-date">${formatDateShort(pr.rDate)}</div>`}
+        </div>
+      </div>`;
+    }).join('');
+
+  return tabBtns + `<div class="pr-list">${items}</div>`;
+}
+
+// ─────────────────────────────────────────────────────
+// DUAL LINE CHART (weight + reps, two Y-axes)
+// ─────────────────────────────────────────────────────
+function buildDualLineChart(pointsA, pointsB) {
+  // pointsA = gold (weight), pointsB = blue (reps)
+  if (!pointsA || pointsA.length < 2) return '<div style="color:var(--text-3);font-size:12px">—</div>';
+  const W=320, H=120, pad={t:18,r:36,b:22,l:36}, cW=W-pad.l-pad.r, cH=H-pad.t-pad.b;
+  const n = pointsA.length;
+
+  const valsA = pointsA.map(p=>p.y);
+  const minA = Math.min(...valsA)*0.92, maxA = Math.max(...valsA)*1.08, rngA = maxA-minA||1;
+
+  const valsB = pointsB.map(p=>p.y);
+  const minB = Math.min(...valsB)*0.92, maxB = Math.max(...valsB)*1.08, rngB = maxB-minB||1;
+
+  const cx = i => pad.l + (i/(n-1))*cW;
+  const cyA = v => pad.t + cH - ((v-minA)/rngA)*cH;
+  const cyB = v => pad.t + cH - ((v-minB)/rngB)*cH;
+
+  const coordsA = pointsA.map((p,i)=>({x:cx(i), y:cyA(p.y), val:p.y}));
+  const coordsB = pointsB.map((p,i)=>({x:cx(i), y:cyB(p.y), val:p.y}));
+
+  const pathA = coordsA.map((c,i)=>`${i===0?'M':'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+  const areaA = `${pathA} L${coordsA[n-1].x.toFixed(1)},${pad.t+cH} L${pad.l},${pad.t+cH} Z`;
+  const pathB = coordsB.map((c,i)=>`${i===0?'M':'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+
+  const yLabelsA = [minA,maxA].map((v,i)=>`<text class="axis-label" x="${pad.l-5}" y="${pad.t+cH-i*cH+3}" text-anchor="end" fill="#c9aa6f">${Math.round(v)}</text>`).join('');
+  const yLabelsB = [minB,maxB].map((v,i)=>`<text class="axis-label" x="${W-pad.r+5}" y="${pad.t+cH-i*cH+3}" text-anchor="start" fill="#6f9ec9">${Math.round(v)}</text>`).join('');
+  const xLabels  = `<text class="axis-label" x="${pad.l}" y="${H-4}" text-anchor="middle">${formatDateShort(pointsA[0].x)}</text><text class="axis-label" x="${W-pad.r}" y="${H-4}" text-anchor="end">${formatDateShort(pointsA[n-1].x)}</text>`;
+
+  const dotsA = coordsA.map(c=>`<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3" fill="#c9aa6f"/>`).join('');
+  const dotsB = coordsB.map(c=>`<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3" fill="#6f9ec9"/>`).join('');
+
+  // Last value labels
+  const lastA = coordsA[n-1];
+  const lastB = coordsB[n-1];
+
+  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="dualAreaA" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c9aa6f" stop-opacity="0.18"/><stop offset="100%" stop-color="#c9aa6f" stop-opacity="0"/></linearGradient>
+    </defs>
+    <line class="axis-line" x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t+cH}"/>
+    <line class="axis-line" x1="${pad.l}" y1="${pad.t+cH}" x2="${W-pad.r}" y2="${pad.t+cH}"/>
+    <line class="axis-line" x1="${W-pad.r}" y1="${pad.t}" x2="${W-pad.r}" y2="${pad.t+cH}"/>
+    ${yLabelsA}${yLabelsB}${xLabels}
+    <path d="${areaA}" fill="url(#dualAreaA)"/>
+    <path d="${pathA}" fill="none" stroke="#c9aa6f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="${pathB}" fill="none" stroke="#6f9ec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 2"/>
+    ${dotsA}${dotsB}
+  </svg>`;
 }
 
 function statsSection(key, title, content) {
+  // Kept for backwards-compat (used in profile weight chart etc)
   const isOpen = window._statsOpen?.[key] !== false;
   return `
     <div class="stats-accordion">
@@ -1594,7 +1752,6 @@ function statsSection(key, title, content) {
 function toggleStatsSection(key) {
   if (!window._statsOpen) window._statsOpen = {};
   window._statsOpen[key] = !window._statsOpen[key];
-  // Toggle DOM directly without full re-render
   const btns = document.querySelectorAll('.stats-accordion-btn');
   btns.forEach(btn => {
     if (btn.getAttribute('onclick')?.includes(`'${key}'`)) {
@@ -1775,27 +1932,7 @@ function buildPRMap(sessions) {
   return prs;
 }
 
-function buildPRListHTML(sessions) {
-  const prs = buildPRMap(sessions);
-  const tab = window._prTab || 'weight';
-  const items = Object.entries(prs)
-    .sort((a,b) => tab==='weight' ? b[1].w-a[1].w : b[1].r-a[1].r)
-    .map(([name,pr])=>`
-    <div class="pr-item">
-      <div class="pr-name">${esc(name)}</div>
-      <div class="pr-right">
-        ${tab==='weight'
-          ? `<div class="pr-weight">${pr.w} kg</div><div class="pr-date">${formatDateShort(pr.wDate)}</div>`
-          : `<div class="pr-weight">${pr.r} reps</div><div class="pr-date">${formatDateShort(pr.rDate)}</div>`}
-      </div>
-    </div>`).join('');
-  return `
-    <div style="display:flex;gap:6px;margin-bottom:10px">
-      <button class="stats-period-btn ${tab==='weight'?'active':''}" onclick="window._prTab='weight';renderProgress()">⚖️ Poids</button>
-      <button class="stats-period-btn ${tab==='reps'?'active':''}" onclick="window._prTab='reps';renderProgress()">🔁 Reps</button>
-    </div>
-    <div class="pr-list">${items}</div>`;
-}
+// buildPRListHTML is replaced by buildTabRecords above
 
 // ─────────────────────────────────────────────────────
 // HEATMAP
@@ -1935,6 +2072,141 @@ function saveProfile() {
     BODY_LOG.add(entry);
   }
   toast('Profil enregistré ✓'); updateDrawerProfile(); renderProfileBody();
+}
+
+// ─────────────────────────────────────────────────────
+// EXERCISE LIBRARY MANAGEMENT
+// ─────────────────────────────────────────────────────
+
+function openExerciseLibrarySheet() {
+  closeMenu();
+  document.getElementById('sheet-title').textContent = 'Bibliothèque d\'exercices';
+  renderExerciseLibraryBody();
+  openSheet();
+}
+
+function renderExerciseLibraryBody(searchQ='') {
+  const q = normalizeStr(searchQ);
+
+  // All known exercises with source tag
+  const libExs  = Object.values(EXERCISE_LIBRARY).flat().map(n=>({ name:n, source:'lib' }));
+  const custExs = CUSTOM_EX.names.map(n=>({ name:n, source:'custom' }));
+  const all = [...custExs, ...libExs];
+
+  const filtered = q ? all.filter(e=>normalizeStr(e.name).includes(q)) : all;
+
+  const rows = filtered.map(e => {
+    const muscles = getMusclesForExercise(e.name);
+    const isCustom = e.source === 'custom';
+    const usedCount = DB.sessions.reduce((a,s)=>a+(s.exercises.some(x=>x.name===e.name)?1:0),0);
+    return `<div class="exlib-row">
+      <div class="exlib-row-info">
+        <div class="exlib-row-name">${esc(e.name)}</div>
+        <div class="exlib-row-meta">
+          ${muscles.slice(0,2).map((m,i)=>`<span class="exlib-muscle-tag${i===0?' primary':''}">${esc(m)}</span>`).join('')}
+          ${usedCount ? `<span class="exlib-used">${usedCount} séance${usedCount>1?'s':''}</span>` : ''}
+          ${isCustom ? '<span class="exlib-custom-badge">Personnalisé</span>' : ''}
+        </div>
+      </div>
+      <div class="exlib-row-actions">
+        <button class="exlib-btn-edit" onclick="openEditExercise('${esc(e.name)}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        ${isCustom ? `<button class="exlib-btn-del" onclick="confirmDeleteCustomEx('${esc(e.name)}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const emptyMsg = filtered.length === 0 ? `<div class="stats-empty-hint">Aucun exercice trouvé.</div>` : '';
+
+  document.getElementById('sheet-body').innerHTML = `
+    <div class="exlib-search-wrap">
+      <svg class="search-bar-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search-bar-input" style="padding-left:36px" placeholder="Rechercher…" oninput="renderExerciseLibraryBody(this.value)" value="${esc(searchQ)}" autocomplete="off">
+    </div>
+    <div class="exlib-count">${filtered.length} exercice${filtered.length>1?'s':''} · ${custExs.length} personnalisé${custExs.length>1?'s':''}</div>
+    <div class="exlib-list">${rows}${emptyMsg}</div>`;
+  document.getElementById('sheet-footer').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeSheet()">Fermer</button>`;
+}
+
+function openEditExercise(name) {
+  const muscles = getMusclesForExercise(name);
+  const isCustom = CUSTOM_EX.names.includes(name);
+  const allMuscles = [...Object.keys(EXERCISE_LIBRARY), 'Avant-bras', 'Autre'];
+  const usedIn = DB.sessions.filter(s=>s.exercises.some(e=>e.name===name)).length;
+
+  document.getElementById('sheet-title').textContent = 'Modifier l\'exercice';
+  document.getElementById('sheet-body').innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Nom</label>
+      <input class="form-input" id="eedit-name" value="${esc(name)}" ${!isCustom?'readonly style="opacity:.5"':''} autocomplete="off">
+      ${!isCustom?'<div style="font-family:var(--font-mono);font-size:9px;color:var(--text-3);margin-top:4px">Le nom des exercices intégrés ne peut pas être modifié</div>':''}
+    </div>
+    <div class="form-label" style="margin-bottom:10px">Muscles travaillés</div>
+    <div class="muscle-tag-grid" id="eedit-muscles">
+      ${allMuscles.map(m=>`<button class="muscle-tag-btn${muscles.includes(m)?' active':''}" data-m="${esc(m)}" onclick="toggleMuscleTag(this)">${esc(m)}</button>`).join('')}
+    </div>
+    ${usedIn ? `<div style="font-family:var(--font-mono);font-size:10px;color:var(--text-3);margin-top:8px">Utilisé dans ${usedIn} séance${usedIn>1?'s':''}</div>` : ''}`;
+  document.getElementById('sheet-footer').innerHTML = `
+    <button class="btn btn-primary" onclick="saveEditExercise('${esc(name)}', ${isCustom})">Enregistrer</button>
+    <button class="btn btn-secondary" onclick="openExerciseLibrarySheet()">Retour</button>`;
+  window._editExOrigName = name;
+}
+
+function saveEditExercise(origName, isCustom) {
+  const newName = isCustom ? (document.getElementById('eedit-name')?.value||'').trim() : origName;
+  if (!newName) { toast('Entrez un nom','error'); return; }
+  const selected = [...document.querySelectorAll('#eedit-muscles .muscle-tag-btn.active')].map(b=>b.dataset.m);
+
+  if (isCustom) {
+    // Remove old entry, add new with updated name + muscles
+    const l = CUSTOM_EX.list;
+    const idx = l.findIndex(e=>(typeof e==='string'?e:e.name)===origName);
+    if (idx !== -1) { l[idx] = { name:newName, muscles:selected }; _persist(CUSTOM_EX._key, l); _cache.customEx = l; }
+    // If name changed, update all sessions & presets
+    if (newName !== origName) {
+      const sessions = DB.sessions.map(s=>({...s, exercises:s.exercises.map(e=>({...e, name:e.name===origName?newName:e.name}))}));
+      DB.save(sessions);
+      const presets = PRESETS.list.map(p=>({...p, exercises:p.exercises.map(e=>({...e, name:e.name===origName?newName:e.name}))}));
+      PRESETS.save(presets);
+    }
+  } else {
+    // Library exercise: store custom muscle override in a separate map
+    const overrides = JSON.parse(localStorage.getItem('strongboy_muscle_overrides')||'{}');
+    overrides[origName] = selected;
+    localStorage.setItem('strongboy_muscle_overrides', JSON.stringify(overrides));
+    window._muscleOverrides = overrides;
+  }
+  toast('Exercice modifié ✓');
+  openExerciseLibrarySheet();
+}
+
+function confirmDeleteCustomEx(name) {
+  const usedIn = DB.sessions.filter(s=>s.exercises.some(e=>e.name===name)).length;
+  document.getElementById('sheet-title').textContent = 'Supprimer l\'exercice ?';
+  document.getElementById('sheet-body').innerHTML = `<div class="confirm-body">
+    Supprimer <span class="confirm-name">${esc(name)}</span> de la bibliothèque ?
+    ${usedIn ? `<br><span class="confirm-warn">Cet exercice apparaît dans ${usedIn} séance${usedIn>1?'s':''}. Les données ne seront pas supprimées.</span>` : ''}
+  </div>`;
+  document.getElementById('sheet-footer').innerHTML = `
+    <button class="btn btn-danger" onclick="deleteCustomEx('${esc(name)}')">Supprimer</button>
+    <button class="btn btn-secondary" onclick="openExerciseLibrarySheet()">Annuler</button>`;
+}
+
+function deleteCustomEx(name) {
+  const l = CUSTOM_EX.list.filter(e=>(typeof e==='string'?e:e.name)!==name);
+  _persist(CUSTOM_EX._key, l); _cache.customEx = l;
+  toast(`"${name}" supprimé`,'error');
+  openExerciseLibrarySheet();
+}
+
+// Load muscle overrides on boot
+function loadMuscleOverrides() {
+  try { window._muscleOverrides = JSON.parse(localStorage.getItem('strongboy_muscle_overrides')||'{}'); }
+  catch(e) { window._muscleOverrides = {}; }
 }
 
 // ─────────────────────────────────────────────────────
@@ -2248,6 +2520,7 @@ function seedData() {
 // ─────────────────────────────────────────────────────
 
 seedData();
+loadMuscleOverrides();
 applyAccentColor();
 renderDashboard();
 updateDrawerProfile();
